@@ -4,7 +4,9 @@
 
 The platform registration service keeps a status code described below.
 
-- `00`: Platform registered
+- `0X`: Service status
+  - `00`: Platform registered
+  - `01`: Pending execution
 - `1X`: SGX Platform status
   - `10`: Single socket platform
   - `11`: UEFI variables not available 
@@ -40,28 +42,31 @@ The platform registration service keeps a status code described below.
 ```mermaid
 sequenceDiagram
     actor admin as Platform Admin
-    participant w_cc_ipr as Wrapper CC Intel Platform Registration
     participant cc_ipr as CC Intel Platform Registration
     
     autonumber
 
-    admin->>+w_cc_ipr: start
-        note right of w_cc_ipr: TODO: how do we want to do this? Docker?
+    admin->>+cc_ipr: launch
+        note right of cc_ipr: TODO: how do we want to do this? Docker?
 
-        w_cc_ipr->>w_cc_ipr: Read CC_IPR_REGISTRATION_INTERVAL
-        note right of w_cc_ipr: Interval in minutes
+        cc_ipr->>cc_ipr: Read CC_IPR_REGISTRATION_INTERVAL
+        note right of cc_ipr: Interval in minutes
+
+        cc_ipr->>cc_ipr: Initialize status code with the value of 01
+
+        cc_ipr->>cc_ipr: Spawn the Prometheus Metrics Server
 
         loop True
-            w_cc_ipr->>+cc_ipr: register_platform()
+            cc_ipr->>+cc_ipr: register_platform()
                 note right of cc_ipr: See diagram `2. Registration Flow`
-            cc_ipr-->>-w_cc_ipr: Status Code
+            cc_ipr-->>-cc_ipr: Status Code
 
-            w_cc_ipr->>w_cc_ipr: Print the status code to stderr
+            cc_ipr->>cc_ipr: Update the Prometheus Metric with the status code value
 
-            w_cc_ipr->>w_cc_ipr: Wait for configured interval
+            cc_ipr->>cc_ipr: Wait for configured interval
         end
 
-    deactivate w_cc_ipr
+    deactivate cc_ipr
 ```
 
 ### 2. Registration Flow
