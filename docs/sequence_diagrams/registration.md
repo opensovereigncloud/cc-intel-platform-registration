@@ -4,30 +4,28 @@
 
 The platform registration service keeps a status code described below.
 
-- `0X`: Service status
+- `0X`: SGX status
   - `00`: Platform registered
   - `01`: Pending execution
-- `1X`: SGX Platform status
-  - `10`: Single socket platform
-  - `11`: UEFI variables not available 
-  - `12`: Direct/Indirect Registration already performed (unknown which)
-- `2X`: Direct Registration Status
-  - `20`: Failed to connect to Intel RS
-  - `21`: Invalid registration request
+  - `02`: Single socket platform
+  - `03`: SGX UEFI variables not available 
+  - `04`: Direct/Indirect Registration already performed (unknown which)
+  - `05`: Platform reboot required
+- `1X`: Direct Registration Status
+  - `10`: Failed to connect to Intel RS
+  - `11`: Invalid registration request
     - Status Code: 400 --- Error Code: InvalidRequestSyntax
     - Status Code: 400 --- Error Code: InvalidPlatformManifest
     - Status Code: 415
-  - `22`: Invalid platform data
+  - `12`: Invalid platform data
     - Status Code: 400 --- Error Code: InvalidOrRevokedPackage 
     - Status Code: 400 --- Error Code: PackageNotFound 
     - Status Code: 400 --- Error Code: IncompatiblePackage 
-  - `23`: Platform root keys can no longer be cached. Indirect registration already performed
+  - `13`: Platform root keys can no longer be cached. Indirect registration already performed
     - Status Code: 400 --- Error Code: CachedKeysPolicyViolation
-  - `24`: Intel RS could not process the request
+  - `14`: Intel RS could not process the request
     - Status Code: 500
     - Status Code: 503
-- `3X`
-- `4X`
 - `5X`: PCK Cert Status
   - `50`: PCK Cert issued by PCK Processor CA and no information about the cached platform root keys is available
   - `51`: Platform root keys not cached by the Intel RS (Indirect Registration); this operation mode is not supported
@@ -54,17 +52,22 @@ sequenceDiagram
 
         cc_ipr->>cc_ipr: Initialize status code with the value of 01
 
-        cc_ipr->>cc_ipr: Spawn the Prometheus Metrics Server
+        rect rgb(100, 200, 100)
+            note right of cc_ipr: This block is spawned
+            
+            loop True
+                cc_ipr->>+cc_ipr: register_platform()
+                    note right of cc_ipr: See diagram `2. Registration Flow`
+                cc_ipr-->>-cc_ipr: Status Code
 
-        loop True
-            cc_ipr->>+cc_ipr: register_platform()
-                note right of cc_ipr: See diagram `2. Registration Flow`
-            cc_ipr-->>-cc_ipr: Status Code
+                cc_ipr->>cc_ipr: Update the Prometheus Metric with the status code value
 
-            cc_ipr->>cc_ipr: Update the Prometheus Metric with the status code value
-
-            cc_ipr->>cc_ipr: Wait for configured interval
+                cc_ipr->>cc_ipr: Wait for configured interval
+            end
         end
+
+        cc_ipr->>cc_ipr: Launch the Prometheus Metrics Server
+        note right of cc_ipr: Status code available in path `/metrics`
 
     deactivate cc_ipr
 ```
@@ -83,53 +86,48 @@ sequenceDiagram
     cc_ipr->>cc_ipr: Read the number of CPU sockets in the platforms
         
     opt Number of socket is less than or equal to 1
-        cc_ipr->>cc_ipr: Return status code 10
+        cc_ipr->>cc_ipr: Return status code 02
     end 
 
     cc_ipr->>cc_ipr: Read UEFI variable SgxRegistrationStatus
 
     opt UEFI variable SgxRegistrationStatus does NOT exist
-        cc_ipr->>cc_ipr: Return status code 11
+        cc_ipr->>cc_ipr: Return status code 03
     end
 
     alt Flag SgxRegistrationStatus.SgxRegistrationComplete is UNSET 
         opt UEFI variable SgxRegistrationServerRequest does NOT exist
-            cc_ipr->>cc_ipr: Return status code 11
+            cc_ipr->>cc_ipr: Return status code 03
         end
 
         cc_ipr->>cc_ipr: Register platform
         note right of cc_ipr: See diagram `2.2 Registration`
 
-        opt If status code is different from 0
-            cc_ipr->>cc_ipr: Return status code
-        end
+        cc_ipr->>cc_ipr: Return status code
+
     else Flag SgxRegistrationStatus.SgxRegistrationComplete is SET
-        opt Cached PCK Cert does NOT exist
+        alt Cached PCK Cert exists
+            cc_ipr->>cc_ipr: Return status code 00 
+        else Cached PCK Cert does NOT exist
            cc_ipr->>cc_ipr: Read the Encrypted PPID
 
             cc_ipr->>cc_ipr: Read the TCB Info
 
-            cc_ipr-->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcert (body: Encrypted PPID, TCB Info)
-            note right of cc_ipr: Returns the PCK Cert if the Intel RS has cached the platform root keys
+            cc_ipr->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcert (body: Encrypted PPID, TCB Info)
+                note right of cc_ipr: Returns the PCK Cert if the Intel RS has cached the platform root keys
+            pcs-->>-cc_ipr: PCK Cert Chain
 
             alt HTTP Status Code 200
                 cc_ipr->>cc_ipr: Cache retrieved PCK Cert
                 note right of cc_ipr: See diagram `2.1. Cache PCK Cert`
 
-                opt If status code is different from 0
-                    cc_ipr->>cc_ipr: Return status code
-                end
+                cc_ipr->>cc_ipr: Return status code
             else
-                cc_ipr->>cc_ipr: Return status code 12
+                cc_ipr->>cc_ipr: Return status code 04
                 note right of cc_ipr: At this point we cannot determine if the Direct or Indirect Registration has been performed
             end
-        end
-
-        
+        end        
     end
-
-    note right of cc_ipr: TODO: Prometheus integration
-    cc_ipr->>cc_ipr: Return status code 00
 
     deactivate cc_ipr
 ```
@@ -195,16 +193,18 @@ sequenceDiagram
         note right of cc_ipr: After a reboot, the BIOS stops providing the Platform Manifest 
 
         cc_ipr->>cc_ipr: Write UEFI variable SgxRegistrationStatus
+
+        cc_ipr->>cc_ipr: Return status code 05
     Else Connection timeout
-        cc_ipr->>cc_ipr: Return status code 20
+        cc_ipr->>cc_ipr: Return status code 10
     Else Invalid registration request
-        cc_ipr->>cc_ipr: Return status code 21
+        cc_ipr->>cc_ipr: Return status code 11
     Else Invalid platform data
-        cc_ipr->>cc_ipr: Return status code 22
+        cc_ipr->>cc_ipr: Return status code 12
     Else Indirect registration already performed
-        cc_ipr->>cc_ipr: Return status code 23
+        cc_ipr->>cc_ipr: Return status code 13
     Else Intel RS could not process the request
-        cc_ipr->>cc_ipr: Return status code 24
+        cc_ipr->>cc_ipr: Return status code 14
     Else
         cc_ipr->>cc_ipr: Return status code 99
     End
