@@ -1,5 +1,9 @@
 # Platform Registration Flow
 
+## Limitation
+
+- Addition and replacement of CPUs is not supported.
+
 ## Status Code
 
 The platform registration service keeps a status code described below.
@@ -164,6 +168,7 @@ sequenceDiagram
 To set the `Key Caching Policy` to true, we **must** register the Platform with Intel Registration Service first.
 This service will then store the Platform Root Keys.
 
+The flow below also supports `TCB Recovery` and `SGX Reset`.
 
 ```mermaid
 sequenceDiagram
