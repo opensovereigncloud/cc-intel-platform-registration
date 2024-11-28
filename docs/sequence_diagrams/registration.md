@@ -10,10 +10,10 @@ The platform registration service keeps a status code described below.
 
 - `0X`: SGX status
   - `00`: Platform directly registered
-  - `01`: Platform indirectly registered
-  - `02`: Pending execution
-  - `03`: SGX UEFI variables not available 
-  - `04`: Direct/Indirect Registration already performed (unknown which)
+  - `01`: Pending execution
+  - `02`: SGX UEFI variables not available 
+  - `03`: Impossible to determine the registration status; please reattempt
+  - `04`: Impossible to determine the registration status; please reset the SGX
   - `05`: Platform reboot required
 - `1X`: Registration Status
   - `10`: Failed to connect to Intel RS
@@ -55,7 +55,7 @@ sequenceDiagram
         cc_ipr->>cc_ipr: Read CC_IPR_REGISTRATION_INTERVAL
         note right of cc_ipr: Interval in minutes
 
-        cc_ipr->>cc_ipr: Initialize status code with the value of 02
+        cc_ipr->>cc_ipr: Initialize status code with the value of 01
 
         rect rgb(100, 200, 100)
             note right of cc_ipr: This block is spawned
@@ -91,7 +91,7 @@ sequenceDiagram
     cc_ipr->>cc_ipr: Read UEFI variable SgxRegistrationStatus
 
     opt UEFI variable SgxRegistrationStatus does NOT exist
-        cc_ipr->>cc_ipr: Return status code 03
+        cc_ipr->>cc_ipr: Return status code 02
     end
 
     alt Flag SgxRegistrationStatus.SgxRegistrationComplete is UNSET 
@@ -99,11 +99,11 @@ sequenceDiagram
         note right of cc_ipr: The Platform Manifest is available in that variable
 
         opt UEFI variable SgxRegistrationServerRequest does NOT exist
-            cc_ipr->>cc_ipr: Return status code 03
+            cc_ipr->>cc_ipr: Return status code 02
         end
 
         cc_ipr->>cc_ipr: Register platform(Platform Manifest)
-        note right of cc_ipr: See diagram `2.2. Registration`
+        note right of cc_ipr: See diagram `2.1. Registration`
 
         cc_ipr->>cc_ipr: Return status code
 
@@ -123,52 +123,20 @@ sequenceDiagram
         pcs-->>-cc_ipr: PCK Cert Chain
 
         alt HTTP Status Code 200
-            cc_ipr->>cc_ipr: Validate retrieved PCK Cert
-            note right of cc_ipr: See diagram `2.1. Validate PCK Cert`
-
-            cc_ipr->>cc_ipr: Return status code
+            cc_ipr->>cc_ipr: Return status code 00
         else HTTP Status Code 404
-            note right of cc_ipr: UEFI SGX variables available, SGX registration set as Complete and PCK Cert not found
-            cc_ipr->>cc_ipr: Return status code 01
-        else
+            note right of cc_ipr: Registration set as completed but We canNOT determine if an indirect registration has been carried out,<br> 404 might happen because:<br> (i) the direct registration failed, or<br> (ii) the indirect registration was performed
             cc_ipr->>cc_ipr: Return status code 04
-            note right of cc_ipr: At this point we cannot determine if the Direct or Indirect Registration has been performed
+        else
+            note right of cc_ipr: The data available at this moment are insufficient to determine what to do next
+            cc_ipr->>cc_ipr: Return status code 03
         end     
     end
 
     deactivate cc_ipr
 ```
 
-#### 2.1. Validate PCK Cert
-
-```mermaid
-sequenceDiagram
-    participant cc_ipr as CC Intel Platform Registration
-
-    autonumber
-
-    activate cc_ipr
-
-    note right of cc_ipr: Input: PCK Cert
-
-    cc_ipr->>cc_ipr: Read PPID
-
-    alt Failed to parse PCK Cert
-        cc_ipr->>cc_ipr: Return status code 50
-    else PPID does NOT match
-        cc_ipr->>cc_ipr: Return status code 51
-    else PCK Cert Cached Keys Flag does NOT exist
-        cc_ipr->>cc_ipr: Return status code 52 
-    else PCK Cert Cached Keys Flag is NOT set
-        cc_ipr->>cc_ipr: Return status code 53
-    else
-        cc_ipr->>cc_ipr: Return status code 00 
-    end
-
-    deactivate cc_ipr
-```
-
-#### 2.2. Registration
+#### 2.1. Registration
 
 To set the `Key Caching Policy` to true, we **must** register the Platform with Intel Registration Service first.
 This service will then store the Platform Root Keys.
@@ -187,16 +155,9 @@ sequenceDiagram
 
     cc_ipr->>+rs: POST https://api.trustedservices.intel.com/sgx/registration/v1/platform (body: Platform Manifest)
         note right of cc_ipr: Direct registration: Key Caching Policy will be set to always<br> store platform root keys for the given platform
-    rs-->>-cc_ipr: PCK Cert Chain
+    rs-->>-cc_ipr: PPID
     
     Alt Operation successful
-        cc_ipr->>cc_ipr: Validate retrieved PCK Cert
-        note right of cc_ipr: See diagram `2.1. Validate PCK Cert`
-
-        opt If status code is different from 0
-            cc_ipr->>cc_ipr: Return status code
-        end
-
         cc_ipr->>cc_ipr: Read UEFI variable SgxRegistrationStatus
 
         cc_ipr->>cc_ipr: Set the flag SgxRegistrationStatus.SgxRegistrationComplete
@@ -228,9 +189,9 @@ sequenceDiagram
 * *PPID*: Unique Platform Provisioning ID of the processor package or platform instance used by Provisioning Certification Enclave. The PPID does not depend on the TCB.
 * *PCEID*: Identifier of the Intel SGX enclave that uses Provisioning Certification Key to sign proofs that attestation keys or attestation key provisioning protocol messages are created on genuine hardware
 * *PCK Cert*: X.509 certificate binding the PCE's key pair to a certain SGX TCB state
-* *PCK Cert Cached Keys Flag*: PCK Cert extension under OID `1.2.840.113741.1.13.1.7.2` to state whether the platform root keys are cached by Intel RS
 
 ## Documentation
 
+- [Intel RS and Intel PCS API Specification](https://api.portal.trustedservices.intel.com/content/documentation.html)
 - [Intel SGX DCAP Multipackage SW](https://download.01.org/intel-sgx/sgx-dcap/1.9/linux/docs/Intel_SGX_DCAP_Multipackage_SW.pdf)
 - [SGX PCK Certificate Specification](https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/SGX_PCK_Certificate_CRL_Spec-1.4.pdf)
