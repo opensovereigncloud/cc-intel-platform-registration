@@ -5,13 +5,13 @@
 The platform registration service keeps a status code described below.
 
 - `0X`: SGX status
-  - `00`: Platform registered
-  - `01`: Pending execution
-  - `02`: Single socket platform
+  - `00`: Platform directly registered
+  - `01`: Platform indirectly registered
+  - `02`: Pending execution
   - `03`: SGX UEFI variables not available 
   - `04`: Direct/Indirect Registration already performed (unknown which)
   - `05`: Platform reboot required
-- `1X`: Direct Registration Status
+- `1X`: Registration Status
   - `10`: Failed to connect to Intel RS
   - `11`: Invalid registration request
     - Status Code: 400 --- Error Code: InvalidRequestSyntax
@@ -27,10 +27,11 @@ The platform registration service keeps a status code described below.
     - Status Code: 500
     - Status Code: 503
 - `5X`: PCK Cert Status
-  - `50`: PCK Cert issued by PCK Processor CA and no information about the cached platform root keys is available
-  - `51`: Platform root keys not cached by the Intel RS (Indirect Registration); this operation mode is not supported
+  - `50`: Invalid PCK Cert
+  - `51`: Not this platform PCK Cert
+  - `52`: PCK Cert issued by PCK Processor CA and no information about the cached platform root keys is available
+  - `53`: Platform root keys not cached by the Intel RS (Indirect Registration); this operation mode is not supported
 - `9X`: General errors
-  - `90`: IO error; see logs
   - `99`: Unknown or not supported error; see logs
 
 ## Sequence Diagrams
@@ -50,14 +51,14 @@ sequenceDiagram
         cc_ipr->>cc_ipr: Read CC_IPR_REGISTRATION_INTERVAL
         note right of cc_ipr: Interval in minutes
 
-        cc_ipr->>cc_ipr: Initialize status code with the value of 01
+        cc_ipr->>cc_ipr: Initialize status code with the value of 02
 
         rect rgb(100, 200, 100)
             note right of cc_ipr: This block is spawned
             
             loop True
                 cc_ipr->>+cc_ipr: register_platform()
-                    note right of cc_ipr: See diagram `2. Registration Flow`
+                    note right of cc_ipr: See diagram `2. Registration Check Flow`
                 cc_ipr-->>-cc_ipr: Status Code
 
                 cc_ipr->>cc_ipr: Update the Prometheus Metric with the status code value
@@ -72,7 +73,7 @@ sequenceDiagram
     deactivate cc_ipr
 ```
 
-### 2. Registration Flow
+### 2. Registration Check Flow
 
 ```mermaid
 sequenceDiagram
@@ -83,12 +84,6 @@ sequenceDiagram
 
     activate cc_ipr
 
-    cc_ipr->>cc_ipr: Read the number of CPU sockets in the platforms
-        
-    opt Number of socket is less than or equal to 1
-        cc_ipr->>cc_ipr: Return status code 02
-    end 
-
     cc_ipr->>cc_ipr: Read UEFI variable SgxRegistrationStatus
 
     opt UEFI variable SgxRegistrationStatus does NOT exist
@@ -96,43 +91,46 @@ sequenceDiagram
     end
 
     alt Flag SgxRegistrationStatus.SgxRegistrationComplete is UNSET 
+        cc_ipr->>cc_ipr: Read UEFI variable SgxRegistrationServerRequest
+        note right of cc_ipr: The Platform Manifest is available in that variable
+
         opt UEFI variable SgxRegistrationServerRequest does NOT exist
             cc_ipr->>cc_ipr: Return status code 03
         end
 
-        cc_ipr->>cc_ipr: Register platform
-        note right of cc_ipr: See diagram `2.2 Registration`
+        cc_ipr->>cc_ipr: Register platform(Platform Manifest)
+        note right of cc_ipr: See diagram `2.2. Registration`
 
         cc_ipr->>cc_ipr: Return status code
 
     else Flag SgxRegistrationStatus.SgxRegistrationComplete is SET
-        alt Cached PCK Cert exists
-            cc_ipr->>cc_ipr: Return status code 00 
-        else Cached PCK Cert does NOT exist
-           cc_ipr->>cc_ipr: Read the Encrypted PPID
+        note right of cc_ipr: We want to determine whether Direct or Indirect Registration was performed
+        cc_ipr->>cc_ipr: Read the Encrypted PPID
 
-            cc_ipr->>cc_ipr: Read the TCB Info
+        cc_ipr->>cc_ipr: Read the PCEID
 
-            cc_ipr->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcert (body: Encrypted PPID, TCB Info)
-                note right of cc_ipr: Returns the PCK Cert if the Intel RS has cached the platform root keys
-            pcs-->>-cc_ipr: PCK Cert Chain
+        cc_ipr->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcert (body: Encrypted PPID, PCEID)
+            note right of cc_ipr: Returns the PCK Cert if the Intel RS has cached the platform root keys (aka. Direct Registration)
+        pcs-->>-cc_ipr: PCK Cert Chain
 
-            alt HTTP Status Code 200
-                cc_ipr->>cc_ipr: Cache retrieved PCK Cert
-                note right of cc_ipr: See diagram `2.1. Cache PCK Cert`
+        alt HTTP Status Code 200
+            cc_ipr->>cc_ipr: Validate retrieved PCK Cert
+            note right of cc_ipr: See diagram `2.1. Validate PCK Cert`
 
-                cc_ipr->>cc_ipr: Return status code
-            else
-                cc_ipr->>cc_ipr: Return status code 04
-                note right of cc_ipr: At this point we cannot determine if the Direct or Indirect Registration has been performed
-            end
-        end        
+            cc_ipr->>cc_ipr: Return status code
+        else HTTP Status Code 404
+            note right of cc_ipr: UEFI SGX variables available, SGX registration set as Complete and PCK Cert not found
+            cc_ipr->>cc_ipr: Return status code 01
+        else
+            cc_ipr->>cc_ipr: Return status code 04
+            note right of cc_ipr: At this point we cannot determine if the Direct or Indirect Registration has been performed
+        end     
     end
 
     deactivate cc_ipr
 ```
 
-#### 2.1. Cache PCK Cert
+#### 2.1. Validate PCK Cert
 
 ```mermaid
 sequenceDiagram
@@ -144,16 +142,16 @@ sequenceDiagram
 
     note right of cc_ipr: Input: PCK Cert
 
-    alt PCK Cert Cached Keys Flag does NOT exist
-        cc_ipr->>cc_ipr: Return status code 50 
+    cc_ipr->>cc_ipr: Read PPID
+
+    alt Failed to parse PCK Cert
+        cc_ipr->>cc_ipr: Return status code 50
+    else PPID does NOT match
+        cc_ipr->>cc_ipr: Return status code 51
+    else PCK Cert Cached Keys Flag does NOT exist
+        cc_ipr->>cc_ipr: Return status code 52 
     else PCK Cert Cached Keys Flag is NOT set
-        cc_ipr->>cc_ipr: Return status code 51 
-    end
-
-    cc_ipr->>cc_ipr: Cache retrieved PCK Cert
-
-    alt IO error
-        cc_ipr->>cc_ipr: Return status code 90 
+        cc_ipr->>cc_ipr: Return status code 53
     else
         cc_ipr->>cc_ipr: Return status code 00 
     end
@@ -161,7 +159,11 @@ sequenceDiagram
     deactivate cc_ipr
 ```
 
-#### 2.2 Registration
+#### 2.2. Registration
+
+To set the `Key Caching Policy` to true, we **must** register the Platform with Intel Registration Service first.
+This service will then store the Platform Root Keys.
+
 
 ```mermaid
 sequenceDiagram
@@ -171,17 +173,15 @@ sequenceDiagram
     autonumber
 
     activate cc_ipr
-    
-    cc_ipr->>cc_ipr: Read UEFI variable SgxRegistrationServerRequest
-    note right of cc_ipr: The platform Manifest is available in that variable
+    note right of cc_ipr: Input: Platform Manifest
 
     cc_ipr->>+rs: POST https://api.trustedservices.intel.com/sgx/registration/v1/platform (body: Platform Manifest)
-        note right of cc_ipr: Direct registration: Key Caching Policy will be set to always<br> store platform root keys for the given platform 
+        note right of cc_ipr: Direct registration: Key Caching Policy will be set to always<br> store platform root keys for the given platform
     rs-->>-cc_ipr: PCK Cert Chain
     
-    Alt PCK Cert Chain Downloaded
-        cc_ipr->>cc_ipr: Cache retrieved PCK Cert
-        note right of cc_ipr: See diagram `2.1. Cache PCK Cert`
+    Alt Operation successful
+        cc_ipr->>cc_ipr: Validate retrieved PCK Cert
+        note right of cc_ipr: See diagram `2.1. Validate PCK Cert`
 
         opt If status code is different from 0
             cc_ipr->>cc_ipr: Return status code
@@ -215,8 +215,8 @@ sequenceDiagram
 ## Artifacts
 
 * *Platform manifest*: A BLOB which contains the platform root pub keys used to register the SGX platform with the Intel Registration Service
-* *PPID*: Platform Provisioning ID
-* *TCB Info*: Compound of SGX TCB state (CPUSVN), PCESVN, and PCEID
+* *PPID*: Unique Platform Provisioning ID of the processor package or platform instance used by Provisioning Certification Enclave. The PPID does not depend on the TCB.
+* *PCEID*: Identifier of the Intel SGX enclave that uses Provisioning Certification Key to sign proofs that attestation keys or attestation key provisioning protocol messages are created on genuine hardware
 * *PCK Cert*: X.509 certificate binding the PCE's key pair to a certain SGX TCB state
 * *PCK Cert Cached Keys Flag*: PCK Cert extension under OID `1.2.840.113741.1.13.1.7.2` to state whether the platform root keys are cached by Intel RS
 
