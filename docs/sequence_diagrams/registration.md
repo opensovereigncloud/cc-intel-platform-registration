@@ -2,7 +2,7 @@
 
 ## Limitation
 
-- Addition and replacement of CPUs is not supported.
+- Addition or replacement of CPUs is not supported.
 
 ## Status Code
 
