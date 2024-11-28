@@ -108,6 +108,11 @@ sequenceDiagram
         cc_ipr->>cc_ipr: Return status code
 
     else Flag SgxRegistrationStatus.SgxRegistrationComplete is SET
+        opt UEFI variable SgxRegistrationServerRequest exists
+            note right of cc_ipr: We finished the registration and updated SgxRegistrationStatus.SgxRegistrationComplete.<br> However, the reboot has not been performed yet so that<br> the BIOS can remove SgxRegistrationServerRequest
+            cc_ipr->>cc_ipr: Return status code 05
+        end
+
         note right of cc_ipr: We want to determine whether Direct or Indirect Registration was performed
         cc_ipr->>cc_ipr: Read the Encrypted PPID
 
