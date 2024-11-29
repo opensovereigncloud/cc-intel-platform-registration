@@ -115,12 +115,13 @@ sequenceDiagram
 
         note right of cc_ipr: We want to determine whether Direct or Indirect Registration was performed
         cc_ipr->>cc_ipr: Read the Encrypted PPID
+        note right of cc_ipr: To query this information we must run as an enclave
 
         cc_ipr->>cc_ipr: Read the PCEID
 
-        cc_ipr->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcert (body: Encrypted PPID, PCEID)
+        cc_ipr->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcerts (body: Encrypted PPID, PCEID)
             note right of cc_ipr: Returns the PCK Cert if the Intel RS has cached the platform root keys (aka. Direct Registration)
-        pcs-->>-cc_ipr: PCK Cert Chain
+        pcs-->>-cc_ipr: JSON data structure containing a collection of PCK Certs
 
         alt HTTP Status Code 200
             cc_ipr->>cc_ipr: Return status code 00
