@@ -83,6 +83,7 @@ sequenceDiagram
 sequenceDiagram
     participant cc_ipr as CC Intel Platform Registration
     participant pcs as SGX Platform Certification Service (PCS)
+    participant pce as SGX Provisioning Certification Enclave (PCE)
 
     autonumber
 
@@ -114,10 +115,14 @@ sequenceDiagram
         end
 
         note right of cc_ipr: We want to determine whether Direct or Indirect Registration was performed
-        cc_ipr->>cc_ipr: Read the Encrypted PPID
-        note right of cc_ipr: To query this information we must run as an enclave
 
-        cc_ipr->>cc_ipr: Read the PCEID
+        cc_ipr->>+pce: Read the PCE info 
+            note right of cc_ipr: We use the Intel SGX SDK to manage the communication with the SGX PCE (`sgx_get_pce_info`)
+        pce-->>-cc_ipr: Encrypted PPID, PCEID
+
+        opt Error while retrieving PCE info
+            cc_ipr->>cc_ipr: Return status code 03
+        end
 
         cc_ipr->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcerts (body: Encrypted PPID, PCEID)
             note right of cc_ipr: Returns the PCK Cert if the Intel RS has cached the platform root keys (aka. Direct Registration)
