@@ -1,0 +1,6 @@
+cc-intel-platform-registration
+.vscode
+**/*.pem
+**/*.o
+**/*.c
+**/*.so
