@@ -1,0 +1,5 @@
+cc-intel-platform-registration
+.vscode
+
+# skip bin dirs
+**/bin
