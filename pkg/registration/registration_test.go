@@ -22,13 +22,13 @@ type TestRegistrationChecker struct {
 	counter     int
 }
 
-func (rc *TestRegistrationChecker) Check() metrics.StatusCode {
+func (rc *TestRegistrationChecker) Check() (metrics.StatusCodeMetric, error) {
 	if rc.counter == len(rc.metricSteps) {
 		rc.counter = 0
 	}
 	currentMetric := rc.metricSteps[rc.counter]
 	rc.counter++
-	return currentMetric
+	return metrics.StatusCodeMetric{Status: currentMetric}, nil
 }
 
 func TestRegistrationServiceRun(t *testing.T) {
@@ -53,25 +53,25 @@ func TestRegistrationServiceRun(t *testing.T) {
 				{
 					Entry: zapcore.Entry{
 						Level:   zap.InfoLevel,
-						Message: "Status code metric updated - Code: 0, HTTP StatusCode: 0, Intel Error code: ",
+						Message: "Status code metric updated - Code: 0, HTTP StatusCode: , Intel Error code: ",
 					},
 				},
 				{
 					Entry: zapcore.Entry{
-						Level:   zap.DebugLevel,
-						Message: "Registration check completed",
+						Level:   zap.InfoLevel,
+						Message: "Status code metric updated - Code: 9, HTTP StatusCode: , Intel Error code: ",
 					},
 				},
 				{
 					Entry: zapcore.Entry{
-						Level:   zap.DebugLevel,
-						Message: "Registration check completed",
+						Level:   zap.InfoLevel,
+						Message: "Status code metric updated - Code: 10, HTTP StatusCode: , Intel Error code: ",
 					},
 				},
 				{
 					Entry: zapcore.Entry{
-						Level:   zap.DebugLevel,
-						Message: "Registration check completed",
+						Level:   zap.InfoLevel,
+						Message: "Status code metric updated - Code: 2, HTTP StatusCode: , Intel Error code: ",
 					},
 				},
 			},
@@ -99,15 +99,15 @@ func TestRegistrationServiceRun(t *testing.T) {
 
 	}
 	c := cases[0]
-	for i, observedLog := range observedLogs.All() {
-		thisLogEntryEqualTo(t, c.expectedLogEntries[i], observedLog, c.msg)
+	for i, expectedLog := range c.expectedLogEntries {
+		observedLog := observedLogs.All()[i]
+		thisLogEntryEqualTo(t, expectedLog, observedLog, c.msg)
 	}
 
 }
 
 func thisLogEntryEqualTo(t testing.TB, this, other observer.LoggedEntry, msg string) {
 	t.Helper()
-	// todo(): also check .Data (which has the log fields)
 	assert.Equal(t, this.Level, other.Level, msg)
 	assert.Equal(t, this.Message, other.Message, msg)
 

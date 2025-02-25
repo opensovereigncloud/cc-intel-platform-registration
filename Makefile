@@ -15,14 +15,17 @@ endif
 
 BINARY_NAME=cc-intel-platform-registration
 
+# Tools
+GOLANGCI_LINT_VERSION=v1.63.4
+
 GOVULNCHECK=$(GOCMD) run golang.org/x/vuln/cmd/govulncheck@latest
 
 .PHONY: all build test clean deps lint security-check check
 
 all: check build
 
-build:
-	$(GOBUILD) -o $(BINARY_NAME) -v
+build: mp_management
+	$(GOBUILD) -o $(BINARY_NAME) -v 
 
 test:
 	$(GOTEST) -v ./...
@@ -30,6 +33,11 @@ test:
 clean:
 	$(GOCMD) clean
 	rm -f $(BINARY_NAME)
+	cd $(PWD)/third_party/mp_management && $(MAKE) clean
+
+mp_management:
+	cd $(PWD)/third_party/mp_management && $(MAKE) 
+
 
 deps:
 	$(GOMOD) download
@@ -44,7 +52,7 @@ GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 golangci-lint:
 	@[ -f $(GOLANGCI_LINT) ] || { \
 		set -e ;\
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell dirname $(GOLANGCI_LINT)) v1.63.4 ;\
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell dirname $(GOLANGCI_LINT)) $(GOLANGCI_LINT_VERSION);\
 	}
 
 .PHONY: lint-fix

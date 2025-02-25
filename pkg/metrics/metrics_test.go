@@ -24,7 +24,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: PENDING,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 0,
 		},
@@ -33,7 +33,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: SGX_UEFI_UNAVAILABLE,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 1,
 		},
@@ -42,7 +42,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: RETRY_NEEDED,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 2,
 		},
@@ -51,7 +51,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: SGX_RESET_NEEDED,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: true,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 3,
 		},
@@ -60,7 +60,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: UEFI_PERSIST_FAILED,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 4,
 		},
@@ -69,7 +69,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: PLATFORM_REBOOT_NEEDED,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 5,
 		},
@@ -78,7 +78,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: PLATFORM_DIRECTLY_REGISTERED,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 9,
 		},
@@ -87,7 +87,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: INTEL_CONNECT_FAILED,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 10,
 		},
@@ -96,7 +96,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: INVALID_REGISTRATION_REQUEST,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: true,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   true,
 			},
 			wantedIntValue: 11,
 		},
@@ -105,7 +105,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: INTEL_RS_REQUEST_FAILED,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: true,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 12,
 		},
@@ -114,7 +114,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: UNKNOWN_ERROR,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 99,
 		},
@@ -254,15 +254,8 @@ func TestUpdateServiceStatusCodeMetricWarning(t *testing.T) {
 				IntelError:     "",
 			},
 
-			expectError: true,
-			expectedLogEntries: []observer.LoggedEntry{
-				{
-					Entry: zapcore.Entry{
-						Level:   zap.InfoLevel,
-						Message: "Status code metric updated - Code: 0, HTTP StatusCode: , Intel Error code: ",
-					},
-				},
-			},
+			expectError:        true,
+			expectedLogEntries: []observer.LoggedEntry{},
 		},
 		{
 			msg: "INVALID_REGISTRATION_REQUEST requires http code label ",
@@ -272,12 +265,34 @@ func TestUpdateServiceStatusCodeMetricWarning(t *testing.T) {
 				IntelError:     "",
 			},
 
-			expectError: true,
+			expectError:        true,
+			expectedLogEntries: []observer.LoggedEntry{},
+		},
+		{
+			msg: "INVALID_REGISTRATION_REQUEST requires http code label and intel error code ",
+			metricUpdate: StatusCodeMetric{
+				Status:         INVALID_REGISTRATION_REQUEST,
+				HttpStatusCode: "400",
+				IntelError:     "",
+			},
+
+			expectError:        true,
+			expectedLogEntries: []observer.LoggedEntry{},
+		},
+		{
+			msg: "INVALID_REGISTRATION_REQUEST requires http code label and intel error code ",
+			metricUpdate: StatusCodeMetric{
+				Status:         INVALID_REGISTRATION_REQUEST,
+				HttpStatusCode: "400",
+				IntelError:     "InvalidRequest",
+			},
+
+			expectError: false,
 			expectedLogEntries: []observer.LoggedEntry{
 				{
 					Entry: zapcore.Entry{
 						Level:   zap.InfoLevel,
-						Message: "Status code metric updated - Code: 0, HTTP StatusCode: , Intel Error code: ",
+						Message: "Status code metric updated - Code: 11, HTTP StatusCode: 400, Intel Error code: InvalidRequest",
 					},
 				},
 			},
@@ -315,7 +330,6 @@ func TestUpdateServiceStatusCodeMetricWarning(t *testing.T) {
 
 func thisLogEntryEqualTo(t testing.TB, this, other observer.LoggedEntry, msg string) {
 	t.Helper()
-	// todo(): also check .Data (which has the log fields)
 	assert.Equal(t, this.Level, other.Level, msg)
 	assert.Equal(t, this.Message, other.Message, msg)
 

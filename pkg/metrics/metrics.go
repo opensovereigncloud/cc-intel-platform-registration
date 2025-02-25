@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"log/slog"
+	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -22,7 +23,7 @@ type StatusCode int
 
 type StatusCodeDetails struct {
 	RequiresHTTPStatusCode bool
-	AllowsIntelErrCode     bool
+	RequiresIntelErrCode   bool
 }
 
 const (
@@ -41,15 +42,20 @@ const (
 
 func (s StatusCode) GetDetails() StatusCodeDetails {
 	switch s {
-	case INVALID_REGISTRATION_REQUEST, INTEL_RS_REQUEST_FAILED, SGX_RESET_NEEDED:
+	case INVALID_REGISTRATION_REQUEST:
 		return StatusCodeDetails{
 			RequiresHTTPStatusCode: true,
-			AllowsIntelErrCode:     false,
+			RequiresIntelErrCode:   true,
+		}
+	case INTEL_RS_REQUEST_FAILED, SGX_RESET_NEEDED:
+		return StatusCodeDetails{
+			RequiresHTTPStatusCode: true,
+			RequiresIntelErrCode:   false,
 		}
 	default:
 		return StatusCodeDetails{
 			RequiresHTTPStatusCode: false,
-			AllowsIntelErrCode:     false,
+			RequiresIntelErrCode:   false,
 		}
 	}
 
@@ -93,6 +99,27 @@ type StatusCodeMetric struct {
 	IntelError     string
 }
 
+func CreateIntelStatusCodeMetric(http_status_code int, intel_error_code string) StatusCodeMetric {
+	var Status StatusCode
+	if http_status_code >= 400 && http_status_code < 500 {
+		Status = INVALID_REGISTRATION_REQUEST
+	} else {
+		Status = INTEL_RS_REQUEST_FAILED
+	}
+	return StatusCodeMetric{
+		Status:         Status,
+		HttpStatusCode: strconv.Itoa(http_status_code),
+		IntelError:     intel_error_code,
+	}
+}
+
+func CreateUnknownErrorStatusCodeMetric() StatusCodeMetric {
+	return StatusCodeMetric{
+		Status: UNKNOWN_ERROR,
+	}
+	// error_code
+}
+
 type RegistrationServiceMetricsRegistry struct {
 	metrics map[string]prometheus.Collector
 	log     *slog.Logger
@@ -117,7 +144,7 @@ func NewRegistrationServiceMetricsRegistry(logger *slog.Logger) *RegistrationSer
 func (s *RegistrationServiceMetricsRegistry) SetServiceStatusCodeToPending() error {
 	metric_value := StatusCodeMetric{
 		Status:         PENDING,
-		HttpStatusCode: "0",
+		HttpStatusCode: "",
 		IntelError:     "",
 	}
 	return s.UpdateServiceStatusCodeMetric(metric_value)
@@ -131,10 +158,10 @@ func (s *RegistrationServiceMetricsRegistry) UpdateServiceStatusCodeMetric(metri
 			metric_value.Status)
 	}
 
-	if !status_details.AllowsIntelErrCode {
-		metric_value.IntelError = ""
+	if status_details.RequiresIntelErrCode && metric_value.IntelError == "" {
+		return fmt.Errorf("warning: Status code %d requires Intel Error code but none provided",
+			metric_value.Status)
 	}
-
 	// Set the new metric value with labels
 	if c, ok := s.metrics[SERVICE_STATUS_CODE_METRIC].(*prometheus.GaugeVec); ok {
 		c.With(prometheus.Labels{
