@@ -24,7 +24,7 @@ GOVULNCHECK=$(GOCMD) run golang.org/x/vuln/cmd/govulncheck@latest
 
 all: check build
 
-build: mp_management
+build: mp_management sgx_platform_info
 	$(GOBUILD) -o $(BINARY_NAME) -v 
 
 test:
@@ -37,6 +37,9 @@ clean:
 
 mp_management:
 	cd $(PWD)/third_party/mp_management && $(MAKE) 
+
+sgx_platform_info:
+	cd $(PWD)/third_party/sgx_platform_info && $(MAKE) 
 
 
 deps:

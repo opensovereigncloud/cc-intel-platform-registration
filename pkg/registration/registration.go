@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/opensovereigncloud/cc-intel-platform-registration/internal/pkg/mp_management"
+	sgxplatforminfo "github.com/opensovereigncloud/cc-intel-platform-registration/internal/pkg/sgx_platform_info"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/metrics"
 )
 
 const INTEL_PLATFORM_REGISTRATION_ENDPOINT = "https://api.trustedservices.intel.com/sgx/registration/v1/platform"
+const INTEL_PCK_RETRIEVAL_ENDPOINT = "https://api.trustedservices.intel.com/sgx/certification/v4/pckcerts"
 const INTEL_REGISTRATION_REQUEST_TIMEOUT_IN_MINUTES = 2
 
 // RegistrationChecker is an interface to facilitate tests
@@ -46,27 +48,34 @@ func (rc *DefaultRegistrationChecker) Check() (metrics.StatusCodeMetric, error) 
 	}
 
 	if !machine_registration_status {
-		plaform_manifest, err := mp.GetPlatformManifest()
-		if err != nil {
+		plaform_manifest, pm_err := mp.GetPlatformManifest()
+		if pm_err != nil {
 			rc.log.Error("unable to get platform manifests ", slog.String("error", err.Error()))
 			return metrics.StatusCodeMetric{Status: metrics.SGX_UEFI_UNAVAILABLE}, nil
 		}
-		metric, err := rc.registerPlatform(plaform_manifest)
+
+		metric, reg_err := rc.registerPlatform(plaform_manifest)
 
 		// registration was successful
 		if metric.Status == metrics.PLATFORM_REBOOT_NEEDED {
-			err := mp.CompleteMachineRegistrationStatus()
-			if err != nil {
+			reg_status_err := mp.CompleteMachineRegistrationStatus()
+			if reg_status_err != nil {
 				rc.log.Error("unable to set registration status UEFI variable as complete ", slog.String("error", err.Error()))
 				return metrics.StatusCodeMetric{Status: metrics.UEFI_PERSIST_FAILED}, nil
 			}
 		}
-		return metric, err
+		return metric, reg_err
 
 	}
 
-	// todo implement all cases here
-	return metrics.StatusCodeMetric{Status: metrics.UNKNOWN_ERROR}, nil
+	platform_info, err := sgxplatforminfo.GetSgxPcePlatformInfo()
+	if err != nil {
+		rc.log.Error("unable to get platform info", slog.String("error", err.Error()))
+		return metrics.StatusCodeMetric{Status: metrics.RETRY_NEEDED}, nil
+	}
+
+	metric, err := rc.retrievePCKFromIntel(platform_info)
+	return metric, err
 }
 
 func (r *DefaultRegistrationChecker) registerPlatform(platform_manifest mp_management.PlatformManifest) (metrics.StatusCodeMetric, error) {
@@ -98,7 +107,43 @@ func (r *DefaultRegistrationChecker) registerPlatform(platform_manifest mp_manag
 		return metrics.StatusCodeMetric{Status: metrics.PLATFORM_REBOOT_NEEDED}, nil
 	} else {
 		error_code := resp.Header.Get("Error-Code")
-		return metrics.CreateIntelStatusCodeMetric(resp.StatusCode, error_code), nil
+		return metrics.CreateIntelStatusCodeMetricForPlatformRegistration(resp.StatusCode, error_code), nil
+	}
+
+}
+
+func (r *DefaultRegistrationChecker) retrievePCKFromIntel(platform_info *sgxplatforminfo.SgxPcePlatformInfo) (metrics.StatusCodeMetric, error) {
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Duration(INTEL_REGISTRATION_REQUEST_TIMEOUT_IN_MINUTES*time.Minute))
+	defer cancel()
+	client := &http.Client{}
+
+	requestURL := fmt.Sprintf("%s?encrypted_ppid=%s&pceid=%s",
+		INTEL_PCK_RETRIEVAL_ENDPOINT, platform_info.EncryptedPPID, platform_info.PCEInfo.PCEID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+
+	if err != nil {
+		r.log.Error("failed to create request", slog.String("error", err.Error()))
+		return metrics.CreateUnknownErrorStatusCodeMetric(), fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Execute request
+	resp, err := client.Do(req)
+
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			r.log.Error("request timeout to Intel registration service", slog.String("error", err.Error()))
+			return metrics.CreateUnknownErrorStatusCodeMetric(), fmt.Errorf("connection timeout: %w", err)
+		}
+		r.log.Error("failed to send request to Intel registration service", slog.String("error", err.Error()))
+		return metrics.CreateUnknownErrorStatusCodeMetric(), fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		return metrics.StatusCodeMetric{Status: metrics.PLATFORM_DIRECTLY_REGISTERED}, nil
+	} else {
+		error_code := resp.Header.Get("Error-Code")
+		return metrics.CreateIntelStatusCodeMetricForDirectRegistration(resp.StatusCode, error_code), nil
 	}
 
 }
@@ -112,6 +157,9 @@ type RegistrationService struct {
 
 func (r *RegistrationService) Run(ctx context.Context) error {
 	err := r.serverMetrics.SetServiceStatusCodeToPending()
+
+	// first check
+	r.CheckRegistrationStatus()
 
 	if err != nil {
 		return err

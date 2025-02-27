@@ -99,13 +99,29 @@ type StatusCodeMetric struct {
 	IntelError     string
 }
 
-func CreateIntelStatusCodeMetric(http_status_code int, intel_error_code string) StatusCodeMetric {
+func CreateIntelStatusCodeMetricForPlatformRegistration(http_status_code int, intel_error_code string) StatusCodeMetric {
 	var Status StatusCode
 	if http_status_code >= 400 && http_status_code < 500 {
 		Status = INVALID_REGISTRATION_REQUEST
 	} else {
 		Status = INTEL_RS_REQUEST_FAILED
 	}
+	return StatusCodeMetric{
+		Status:         Status,
+		HttpStatusCode: strconv.Itoa(http_status_code),
+		IntelError:     intel_error_code,
+	}
+}
+
+func CreateIntelStatusCodeMetricForDirectRegistration(http_status_code int, intel_error_code string) StatusCodeMetric {
+
+	var Status StatusCode
+	if http_status_code == 404 {
+		Status = SGX_RESET_NEEDED
+	} else {
+		Status = RETRY_NEEDED
+	}
+
 	return StatusCodeMetric{
 		Status:         Status,
 		HttpStatusCode: strconv.Itoa(http_status_code),
