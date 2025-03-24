@@ -14,22 +14,22 @@ endif
 
 # Docker image parameters
 BINARY_NAME=cc-intel-platform-registration
-VERSION?=dev
-DOCKER_REGISTRY?=local
-DOCKER_IMAGE =$(DOCKER_REGISTRY)/cc-intel-platform-registration:$(VERSION)
+VERSION ?=dev
+CONTAINER_TOOL ?= docker
+IMG_REGISTRY ?= local
 GO_MOD_VERSION ?= 1.24.2
-CONTAINER_BUILD_ARGS ?= --build-arg GO_MOD_VERSION=$(GO_MOD_VERSION)
+IMAGE_BUILD_ARGS ?= --build-arg GO_MOD_VERSION=$(GO_MOD_VERSION) --build-arg TARGET_VERSION=${VERSION}
+IMAGE=$(IMG_REGISTRY)/cc-intel-platform-registration:$(VERSION)
 
-
-.PHONY: docker-build
-docker-build:
-	docker build -t $(DOCKER_IMAGE) $(CONTAINER_BUILD_ARGS) .
+.PHONY: build-image
+build-image:
+	$(CONTAINER_TOOL) build -t $(IMAGE) $(IMAGE_BUILD_ARGS) .
 
 .PHONY: docker-push
-docker-push:
-	docker push $(DOCKER_IMAGE)
+image-push:
+	$(CONTAINER_TOOL) push $(IMAGE)
 
-test: mp_management
+test: mp_management sgx_platform_info
 	$(GOTEST) -v ./...
 
 clean:
@@ -106,9 +106,12 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 ##@ Build
 .PHONY: build
-build: mp_management sgx_platform_info  deps fmt vet  ## Build manager binary.
-	$(GOBUILD) -o $(BINARY_NAME)  -trimpath
-
+## Build manager binary.
+build: mp_management sgx_platform_info  deps fmt vet 
+	$(GOBUILD) -v \
+	-ldflags "-s -w -X 'main.version=$(VERSION)' -X 'main.buildDate=$(shell date)'" \
+	-o $(BINARY_NAME) \
+	-trimpath
 
 ifndef ignore-not-found
   ignore-not-found = false

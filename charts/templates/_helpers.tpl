@@ -60,3 +60,34 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+
+
+{{- define "validate.logLevel" -}}
+  {{- $validValues := list "debug" "info" "warn" "error" -}}
+  {{- if not (has . $validValues) -}}
+    {{- fail (printf "Invalid log-level: %s. Must be one of: %v" . $validValues) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "validate.encoder" -}}
+  {{- $validValues := list "json" "console" -}}
+  {{- if not (has . $validValues) -}}
+    {{- fail (printf "Invalid encoder: %s. Must be one of: %v" . $validValues) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- define "validate.timeEncoding" -}}
+  {{- $validValues := list "rfc3339" "rfc3339nano" "iso8601" "millis" "nanos" -}}
+  {{- if not (has . $validValues) -}}
+    {{- fail (printf "Invalid time-encoding: %s. Must be one of: %v" . $validValues) -}}
+  {{- end -}}
+{{- end -}}
+
+
+{{- define "validate.interval" -}}
+  {{- $value := . | int -}}  # Convert to integer
+  {{- if or (lt $value 1) (ne (printf "%v" $value) (printf "%v" .)) -}}
+    {{- fail (printf "Invalid intervalInMinutes: %v. Must be a non-zero positive number." .) -}}
+  {{- end -}}
+{{- end -}}

@@ -46,6 +46,7 @@ RUN wget ${SGX_SDK_URL} && \
     rm $SGX_SDK_INSTALLER
 
 ARG GO_MOD_VERSION
+ARG TARGET_VERSION
 
 RUN wget https://golang.org/dl/go${GO_MOD_VERSION}.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go${GO_MOD_VERSION}.linux-amd64.tar.gz && \
@@ -62,7 +63,7 @@ WORKDIR /cc_build_dir
 
 COPY . .
 
-RUN make build
+RUN make VERSION=${TARGET_VERSION} build
 
 FROM ubuntu:22.04
 

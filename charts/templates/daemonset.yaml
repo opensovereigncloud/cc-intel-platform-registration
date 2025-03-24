@@ -1,3 +1,8 @@
+{{ include "validate.logLevel" .Values.log.level }}
+{{ include "validate.encoder" .Values.log.encoder }}
+{{ include "validate.timeEncoding" .Values.log.timeEncoding }}
+{{ include "validate.interval" .Values.registrationIntervalInMinutes }}
+
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -30,7 +35,16 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["/bin/cc-intel-platform-registration", "start"]
+          command: ["cc-intel-platform-registration"]
+          args:
+            - "--zap-log-level={{ .Values.log.level }}"
+            - "--zap-encoder={{ .Values.log.encoder }}"
+            - "--zap-time-encoding={{ .Values.log.timeEncoding }}"
+          env:
+            - name: CC_IPR_REGISTRATION_INTERVAL_MINUTES
+              value: "{{ .Values.registrationIntervalInMinutes }}"
+            - name: CC_IPR_REGISTRATION_SERVICE_PORT
+              value: "{{ .Values.service.port }}"
           ports:
             - name: metrics
               containerPort: {{ .Values.service.port }}
@@ -41,10 +55,18 @@ spec:
               port: metrics
           readinessProbe:
             httpGet:
-              path: /live
+              path: /ready
               port: metrics
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: efivars
+              mountPath: /sys/firmware/efi/efivars
+      volumes:
+        - name: efivars
+          hostPath:
+            path: /sys/firmware/efi/efivars
+            type: Directory
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

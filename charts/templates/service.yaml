@@ -1,15 +1,16 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "cc-intel-platform-registration.fullname" . }}
+  name: {{ include "cc-intel-platform-registration.fullname" . | trunc 56 | trimSuffix "-" | replace "_" "-" }}
   labels:
     {{- include "cc-intel-platform-registration.labels" . | nindent 4 }}
 spec:
-  type: {{ .Values.service.type }}
+  type: ClusterIP
+  clusterIP: None
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: metrics
-      protocol: TCP
       name: metrics
+      protocol: TCP
+      targetPort: metrics
   selector:
     {{- include "cc-intel-platform-registration.selectorLabels" . | nindent 4 }}

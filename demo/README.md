@@ -4,84 +4,53 @@ This demonstration shows the `cc-intel-platform-registration` in action.
 
 We are going to deploy a simple Grafana + Prometheus setup to help with the visualization of the metrics exported by `cc-intel-platform-registration`.
 
-## Step 1: deploy `cc-intel-platform-registration`
+### EFI System 
 
-Assuming that you have access to a k8s cluster via `kubectl`, and docker and `helm` installed,
+`cc-intel-platform-registration` needs read and write capabilities for SGX UEFI variables.  It must be able to mount the `/sys/firmware/efi/efivars` host path.
 
-- (1) build the image of `cc-intel-platform-registration`
-- (2) push the image into a registry (or use `k3d image import`, if using k3d dev cluster)
-- (3) create a pull secret for the HELM release
-- (4) install `cc-intel-platform-registration` using `helm`
+When creating your cluster with `k3d`, you should explicitly bind the `/sys/firmware/efi/efivars` volume to your nodes:
+e.g A cluster with 1 server and 2 agent nodes
+
+```bash
+k3d cluster create my-cluster-name \
+    --agents 2 \
+    -v /sys/firmware/efi/efivars:/sys/firmware/efi/efivars@agent:0,1 \
+    -v /sys/firmware/efi/efivars:/sys/firmware/efi/efivars@server:0 
+```
+
+### SGX Device Support 
+
+The service requires  a `sgx.intel.com/enclave: 1` on Kubernetes. 
+For deploying with docker-compose, it requires access to `/dev/sgx_enclave`
+
+## Run the `cc-intel-platform-registration` demo
+
+- Copy and setup the environmental variables
+- Build the image of `cc-intel-platform-registration`. 
+When deploying on Kubernetes, push the image into a registry (or use `k3d image import`, if using k3d dev cluster)
+For docker compose, ensure you can pull the built image
+- Add execution permission to the `run-demo` script
+- Run the `./run-demo.sh` script and choose your deployment option.
 
 To do so, execute the following commands, assuming you have cloned and are in the root directory of this repository:
 
 ```bash
 # (1)
-export REGISTRY=your-registry.com/some-path # replace this by the registry path in which you have write permissions
-export VERSION=demo
-make build-image DOCKER_REGISTRY=$REGISTRY VERSION=$VERSION
-
+cp ./demo/.env.template .env 
+nano .env # edit the environmental variables
+source .env
 # (2)
+make build-image IMAGE_REGISTRY=$REGISTRY VERSION=$VERSION
+#  Optionally, push the image to a registry
 docker push $REGISTRY/cc-intel-platform-registration:$VERSION
-
-# (3)
-kubectl create namespace reg-svc-demo
-export REGISTRY_USERNAME=<your-name> # username of the registry service account
-export REGISTRY_ACCESS_TOKEN=<your-access-toke> # read access token
-export REGISTRY_EMAIL=<your-email> # email address of the service account
-kubectl create secret docker-registry reg-svc-pull-secret \
-   --docker-server=registry.scontain.com \
-   --docker-username=$REGISTRY_USERNAME \
-   --docker-password=$REGISTRY_ACCESS_TOKEN \
-   --docker-email=$REGISTRY_EMAIL \
-   --namespace reg-svc-demo
-
+# (3) 
+sudo chmod +x ./demo/run-demo.sh
 # (4)
-helm install reg-svc --namespace reg-svc-demo helm-chart/ \
-    --set "fullnameOverride=reg-svc" \
-    --set imagePullSecrets[0].name=reg-svc-pull-secret
+./demo/run-demo.sh
 ```
 
-After final step, ensure the registration service pod is ready:
+Then, use your browser to nativate to [localhost:3000](localhost:3000). 
 
-```bash
-kubectl get pod -n reg-svc-demo
-```
-
-## Step 2: deploy Grafana dashboard
-
-Execute the `run-demo.sh` script to install a simple Grafana + Prometheus setup. Look into the `demo-manifests` directory to check the k8s manifests.
-
-All the configurables and dashboard are already set for the values used in this demonstration.
-
-```bash
-cd demo
-bash run-demo.sh
-```
-
-If execution is successful, you should see the default credentials for Grafana:
-
-```
-Deployment completed!
-Default Grafana credentials:
-Username: admin
-Password: admin
-```
-
-Check that all pods are ready.
-
-```bash
-kubectl get pod -n monitoring
-```
-
-## Step 3: check grafana dashboard
-
-Use `kubectl` port forwarding to have local access to the Grafana UI.
-
-```bash
-kubectl port-forward -n monitoring services/grafana 3000
-```
-
-Then, use your browser to nativate to [localhost:3000](localhost:3000). User is `admin` and password is `admin`. You can skip the updade of password in this demonstration.
+User is `admin` and password is `admin`. You can skip the upgrade of password in this demonstration.
 
 After login, click on dashboards on the left side menu and check the Registration Service dashboard out.
