@@ -7,7 +7,6 @@ cc-intel-platform-registration
 .build
 helm-chart
 demo
-
 *.o
 *.a
 *.so
