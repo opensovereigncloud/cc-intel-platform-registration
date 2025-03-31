@@ -12,7 +12,22 @@ GOBIN=$(shell go env GOBIN)
 endif
 
 
+# Docker image parameters
 BINARY_NAME=cc-intel-platform-registration
+VERSION?=dev
+DOCKER_REGISTRY?=local
+DOCKER_IMAGE =$(DOCKER_REGISTRY)/cc-intel-platform-registration:$(VERSION)
+GO_MOD_VERSION ?= 1.24.2
+CONTAINER_BUILD_ARGS ?= --build-arg GO_MOD_VERSION=$(GO_MOD_VERSION)
+
+
+.PHONY: docker-build
+docker-build:
+	docker build -t $(DOCKER_IMAGE) $(CONTAINER_BUILD_ARGS) .
+
+.PHONY: docker-push
+docker-push:
+	docker push $(DOCKER_IMAGE)
 
 test: mp_management
 	$(GOTEST) -v ./...
@@ -21,9 +36,14 @@ clean:
 	$(GOCMD) clean
 	rm -f $(BINARY_NAME)
 	cd $(PWD)/third_party/mp_management && $(MAKE) clean
+	cd $(PWD)/third_party/sgx_platform_info && $(MAKE) clean
+
 
 mp_management:
 	cd $(PWD)/third_party/mp_management && $(MAKE) 
+
+sgx_platform_info:
+	cd $(PWD)/third_party/sgx_platform_info && $(MAKE) 
 
 
 deps:
@@ -86,12 +106,8 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 ##@ Build
 .PHONY: build
-build: mp_management  deps fmt vet  ## Build manager binary.
+build: mp_management sgx_platform_info  deps fmt vet  ## Build manager binary.
 	$(GOBUILD) -o $(BINARY_NAME)  -trimpath
-
-.PHONY: run
-run:  fmt vet ## Run a controller from your host.
-	go run main.go
 
 
 ifndef ignore-not-found

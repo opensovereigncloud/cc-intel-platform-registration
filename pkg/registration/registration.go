@@ -5,6 +5,7 @@ import (
 	"time"
 
 	mpmanagement "github.com/opensovereigncloud/cc-intel-platform-registration/internal/pkg/mp_management"
+	sgxplatforminfo "github.com/opensovereigncloud/cc-intel-platform-registration/internal/pkg/sgx_platform_info"
 	intelservices "github.com/opensovereigncloud/cc-intel-platform-registration/pkg/intel_services"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/metrics"
 	"go.uber.org/zap"
@@ -33,14 +34,12 @@ func (rc *DefaultRegistrationChecker) Check() (metrics.StatusCodeMetric, error) 
 
 	isMachineRegistered, err := mp.IsMachineRegistered()
 	if err != nil {
-		rc.log.Error("unable to get the machine registration status", zap.Error(err))
 		return metrics.StatusCodeMetric{Status: metrics.SgxUefiUnavailable}, err
 	}
 
 	if !isMachineRegistered {
 		plaformManifest, platManErr := mp.GetPlatformManifest()
 		if platManErr != nil {
-			rc.log.Error("unable to get platform manifests ", zap.Error(platManErr))
 			return metrics.StatusCodeMetric{Status: metrics.SgxUefiUnavailable}, platManErr
 		}
 		metric, regErr := intelService.RegisterPlatform(plaformManifest)
@@ -49,7 +48,6 @@ func (rc *DefaultRegistrationChecker) Check() (metrics.StatusCodeMetric, error) 
 		if metric.Status == metrics.PlatformRebootNeeded {
 			completeErr := mp.CompleteMachineRegistrationStatus()
 			if completeErr != nil {
-				rc.log.Error("unable to set registration status UEFI variable as complete ", zap.Error(completeErr))
 				return metrics.StatusCodeMetric{Status: metrics.UefiPersistFailed}, completeErr
 			}
 		}
@@ -57,8 +55,13 @@ func (rc *DefaultRegistrationChecker) Check() (metrics.StatusCodeMetric, error) 
 
 	}
 
-	// todo implement all cases here
-	return metrics.StatusCodeMetric{Status: metrics.UnknownError}, nil
+	platformInfo, err := sgxplatforminfo.GetSgxPcePlatformInfo()
+	if err != nil {
+		return metrics.StatusCodeMetric{Status: metrics.RetryNeeded}, err
+	}
+
+	metric, err := intelService.RetrievePCK(platformInfo)
+	return metric, err
 }
 
 type RegistrationService struct {
@@ -75,7 +78,7 @@ func (r *RegistrationService) Run(ctx context.Context) error {
 		return err
 	}
 
-	// first service check
+	// first check
 	r.CheckRegistrationStatus()
 
 	ticker := time.NewTicker(r.intervalDuration)

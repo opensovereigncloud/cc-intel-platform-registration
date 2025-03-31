@@ -2,7 +2,7 @@ package mpmanagement
 
 /*
 #cgo CXXFLAGS: -std=c++17
-#cgo LDFLAGS: -L${SRCDIR}/../../../build/lib -Wl,-rpath,${SRCDIR}/../../../build/lib -lmp_management -lstdc++
+#cgo LDFLAGS: -lmp_management -lstdc++
 
 #include <stdlib.h>
 #include "../../../third_party/mp_management/src/include/c_wrapper/mp_management.h"

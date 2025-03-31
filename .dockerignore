@@ -1,0 +1,13 @@
+cc-intel-platform-registration
+.vscode
+
+# skip bin dirs
+**/bin
+
+.build
+helm-chart
+demo
+
+*.o
+*.a
+*.so
