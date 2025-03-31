@@ -4,10 +4,8 @@ cc-intel-platform-registration
 # skip bin dirs
 **/bin
 
-# Object files
-*.o
+.build
 
-# Libraries
+*.o
 *.a
 *.so
-

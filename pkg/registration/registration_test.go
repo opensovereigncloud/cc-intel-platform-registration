@@ -2,12 +2,10 @@ package registration
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/metrics"
 
 	"go.uber.org/zap"
@@ -22,21 +20,20 @@ type TestRegistrationChecker struct {
 	counter     int
 }
 
-func (rc *TestRegistrationChecker) Check() metrics.StatusCode {
+func (rc *TestRegistrationChecker) Check() (metrics.StatusCodeMetric, error) {
 	if rc.counter == len(rc.metricSteps) {
 		rc.counter = 0
 	}
 	currentMetric := rc.metricSteps[rc.counter]
 	rc.counter++
-	return currentMetric
+	return metrics.StatusCodeMetric{Status: currentMetric}, nil
 }
 
 func TestRegistrationServiceRun(t *testing.T) {
 
 	observedZapCore, observedLogs := observer.New(zap.DebugLevel)
 	observedLogger := zap.New(observedZapCore)
-	logTest := slog.New(logr.ToSlogHandler(zapr.NewLogger(observedLogger)))
-	metricsRegistry := metrics.NewRegistrationServiceMetricsRegistry(logTest)
+	metricsRegistry := metrics.NewRegistrationServiceMetricsRegistry(observedLogger)
 	cases := []struct {
 		msg                string
 		metricSteps        []metrics.StatusCode
@@ -53,7 +50,20 @@ func TestRegistrationServiceRun(t *testing.T) {
 				{
 					Entry: zapcore.Entry{
 						Level:   zap.InfoLevel,
-						Message: "Status code metric updated - Code: 0, HTTP StatusCode: 0, Intel Error code: ",
+						Message: fmt.Sprintf("Status code metric updated - Code: %d, HTTP StatusCode: %s, Intel Error code: %s", metrics.Pending, "", ""),
+					},
+				},
+				{
+					Entry: zapcore.Entry{
+						Level:   zap.DebugLevel,
+						Message: "Registration check completed",
+					},
+				},
+
+				{
+					Entry: zapcore.Entry{
+						Level:   zap.InfoLevel,
+						Message: fmt.Sprintf("Status code metric updated - Code: %d, HTTP StatusCode: %s, Intel Error code: %s", metrics.PlatformDirectlyRegistered, "", ""),
 					},
 				},
 				{
@@ -64,8 +74,20 @@ func TestRegistrationServiceRun(t *testing.T) {
 				},
 				{
 					Entry: zapcore.Entry{
+						Level:   zap.InfoLevel,
+						Message: fmt.Sprintf("Status code metric updated - Code: %d, HTTP StatusCode: %s, Intel Error code: %s", metrics.IntelConnectFailed, "", ""),
+					},
+				},
+				{
+					Entry: zapcore.Entry{
 						Level:   zap.DebugLevel,
 						Message: "Registration check completed",
+					},
+				},
+				{
+					Entry: zapcore.Entry{
+						Level:   zap.InfoLevel,
+						Message: fmt.Sprintf("Status code metric updated - Code: %d, HTTP StatusCode: %s, Intel Error code: %s", metrics.RetryNeeded, "", ""),
 					},
 				},
 				{
@@ -86,7 +108,7 @@ func TestRegistrationServiceRun(t *testing.T) {
 			intervalDuration:    1 * time.Millisecond,
 			serverMetrics:       metricsRegistry,
 			registrationChecker: testRegistrationChecker,
-			log:                 logTest,
+			log:                 observedLogger,
 		}
 
 		testContext, cancelFunc := context.WithTimeout(context.TODO(), 100*time.Millisecond)
@@ -99,15 +121,15 @@ func TestRegistrationServiceRun(t *testing.T) {
 
 	}
 	c := cases[0]
-	for i, observedLog := range observedLogs.All() {
-		thisLogEntryEqualTo(t, c.expectedLogEntries[i], observedLog, c.msg)
+	for i, expectedLog := range c.expectedLogEntries {
+		observedLog := observedLogs.All()[i]
+		thisLogEntryEqualTo(t, expectedLog, observedLog, c.msg)
 	}
 
 }
 
 func thisLogEntryEqualTo(t testing.TB, this, other observer.LoggedEntry, msg string) {
 	t.Helper()
-	// todo(): also check .Data (which has the log fields)
 	assert.Equal(t, this.Level, other.Level, msg)
 	assert.Equal(t, this.Message, other.Message, msg)
 

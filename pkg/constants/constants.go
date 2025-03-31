@@ -5,3 +5,6 @@ const DefaultRegistrationServiceIntervalInMinutesEnv = "CC_IPR_REGISTRATION_INTE
 
 const DefaultRegistrationServicePort = 8080
 const RegistrationServicePortEnv = "CC_IPR_REGISTRATION_SERVICE_PORT"
+
+const IntelPlatformRegistrationEndpoint = "https://api.trustedservices.intel.com/sgx/registration/v1/platform"
+const IntelRegirationRequestTimeoutInMinutes = 2

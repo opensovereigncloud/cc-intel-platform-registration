@@ -14,12 +14,17 @@ endif
 
 BINARY_NAME=cc-intel-platform-registration
 
-test:
+test: mp_management
 	$(GOTEST) -v ./...
 
 clean:
 	$(GOCMD) clean
 	rm -f $(BINARY_NAME)
+	cd $(PWD)/third_party/mp_management && $(MAKE) clean
+
+mp_management:
+	cd $(PWD)/third_party/mp_management && $(MAKE) 
+
 
 deps:
 	$(GOMOD) download
@@ -81,7 +86,7 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 ##@ Build
 .PHONY: build
-build:  deps fmt vet ## Build manager binary.
+build: mp_management  deps fmt vet  ## Build manager binary.
 	$(GOBUILD) -o $(BINARY_NAME)  -trimpath
 
 .PHONY: run

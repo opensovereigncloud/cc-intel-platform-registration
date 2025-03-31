@@ -1,11 +1,9 @@
 package metrics
 
 import (
-	"log/slog"
+	"fmt"
 	"testing"
 
-	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -24,7 +22,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: Pending,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 0,
 		},
@@ -33,7 +31,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: SgxUefiUnavailable,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 1,
 		},
@@ -42,7 +40,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: RetryNeeded,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 2,
 		},
@@ -51,7 +49,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: SgxResetNeeded,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: true,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 3,
 		},
@@ -60,7 +58,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: UefiPersistFailed,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 4,
 		},
@@ -69,7 +67,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: PlatformRebootNeeded,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 5,
 		},
@@ -78,7 +76,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: PlatformDirectlyRegistered,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 9,
 		},
@@ -87,7 +85,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: IntelConnectFailed,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 10,
 		},
@@ -96,7 +94,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: InvalidRegistrationRequest,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: true,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   true,
 			},
 			wantedIntValue: 11,
 		},
@@ -105,7 +103,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: IntelRegServiceRequestFailed,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: true,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 12,
 		},
@@ -114,7 +112,7 @@ func TestGetDetails(t *testing.T) {
 			statusCode: UnknownError,
 			wantedDetails: StatusCodeDetails{
 				RequiresHTTPStatusCode: false,
-				AllowsIntelErrCode:     false,
+				RequiresIntelErrCode:   false,
 			},
 			wantedIntValue: 99,
 		},
@@ -200,8 +198,7 @@ func TestUpdateServiceStatusCodeMetricWarning(t *testing.T) {
 
 	observedZapCore, observedLogs := observer.New(zap.InfoLevel)
 	observedLogger := zap.New(observedZapCore)
-	logTest := slog.New(logr.ToSlogHandler(zapr.NewLogger(observedLogger)))
-	metricsRegistry := NewRegistrationServiceMetricsRegistry(logTest)
+	metricsRegistry := NewRegistrationServiceMetricsRegistry(observedLogger)
 	// logTest.
 	cases := []struct {
 		msg                string
@@ -223,7 +220,7 @@ func TestUpdateServiceStatusCodeMetricWarning(t *testing.T) {
 				{
 					Entry: zapcore.Entry{
 						Level:   zap.InfoLevel,
-						Message: "Status code metric updated - Code: 0, HTTP StatusCode: , Intel Error code: ",
+						Message: fmt.Sprintf("Status code metric updated - Code: %d, HTTP StatusCode: %s, Intel Error code: %s", Pending, "", ""),
 					},
 				},
 			},
@@ -241,7 +238,7 @@ func TestUpdateServiceStatusCodeMetricWarning(t *testing.T) {
 				{
 					Entry: zapcore.Entry{
 						Level:   zap.InfoLevel,
-						Message: "Status code metric updated - Code: 0, HTTP StatusCode: , Intel Error code: ",
+						Message: fmt.Sprintf("Status code metric updated - Code: %d, HTTP StatusCode: %s, Intel Error code: %s", Pending, "", ""),
 					},
 				},
 			},
@@ -254,15 +251,8 @@ func TestUpdateServiceStatusCodeMetricWarning(t *testing.T) {
 				IntelError:     "",
 			},
 
-			expectError: true,
-			expectedLogEntries: []observer.LoggedEntry{
-				{
-					Entry: zapcore.Entry{
-						Level:   zap.InfoLevel,
-						Message: "Status code metric updated - Code: 0, HTTP StatusCode: , Intel Error code: ",
-					},
-				},
-			},
+			expectError:        true,
+			expectedLogEntries: []observer.LoggedEntry{},
 		},
 		{
 			msg: "InvalidRegistrationRequest requires http code label ",
@@ -272,12 +262,34 @@ func TestUpdateServiceStatusCodeMetricWarning(t *testing.T) {
 				IntelError:     "",
 			},
 
-			expectError: true,
+			expectError:        true,
+			expectedLogEntries: []observer.LoggedEntry{},
+		},
+		{
+			msg: "InvalidRegistrationRequest requires http code label and intel error code ",
+			metricUpdate: StatusCodeMetric{
+				Status:         InvalidRegistrationRequest,
+				HttpStatusCode: "400",
+				IntelError:     "",
+			},
+
+			expectError:        true,
+			expectedLogEntries: []observer.LoggedEntry{},
+		},
+		{
+			msg: "InvalidRegistrationRequest requires http code label and intel error code ",
+			metricUpdate: StatusCodeMetric{
+				Status:         InvalidRegistrationRequest,
+				HttpStatusCode: "400",
+				IntelError:     "InvalidRequest",
+			},
+
+			expectError: false,
 			expectedLogEntries: []observer.LoggedEntry{
 				{
 					Entry: zapcore.Entry{
 						Level:   zap.InfoLevel,
-						Message: "Status code metric updated - Code: 0, HTTP StatusCode: , Intel Error code: ",
+						Message: fmt.Sprintf("Status code metric updated - Code: %d, HTTP StatusCode: %s, Intel Error code: %s", InvalidRegistrationRequest, "400", "InvalidRequest"),
 					},
 				},
 			},
@@ -295,7 +307,7 @@ func TestUpdateServiceStatusCodeMetricWarning(t *testing.T) {
 				{
 					Entry: zapcore.Entry{
 						Level:   zap.InfoLevel,
-						Message: "Status code metric updated - Code: 12, HTTP StatusCode: 400, Intel Error code: ",
+						Message: fmt.Sprintf("Status code metric updated - Code: %d, HTTP StatusCode: %s, Intel Error code: %s", IntelRegServiceRequestFailed, "400", ""),
 					},
 				},
 			},
@@ -315,7 +327,6 @@ func TestUpdateServiceStatusCodeMetricWarning(t *testing.T) {
 
 func thisLogEntryEqualTo(t testing.TB, this, other observer.LoggedEntry, msg string) {
 	t.Helper()
-	// todo(): also check .Data (which has the log fields)
 	assert.Equal(t, this.Level, other.Level, msg)
 	assert.Equal(t, this.Message, other.Message, msg)
 

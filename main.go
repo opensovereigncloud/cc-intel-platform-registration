@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,8 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/constants"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/metrics"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/registration"
@@ -31,12 +28,12 @@ var (
 	buildDate = "unknown"
 )
 
-func recoveryMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
+func recoveryMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if r := recover(); r != nil {
-					logger.Error("panic recovered in HTTP handler", slog.Any("panic", r))
+					logger.Error("panic recovered in HTTP handler", zap.Any("panic", r))
 					metrics.IncrementPanicCounts()
 					w.WriteHeader(http.StatusInternalServerError)
 					_, _ = w.Write([]byte("Internal Server Error"))
@@ -48,54 +45,54 @@ func recoveryMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 }
 
 // GetRegistrationServicePort retrieves the Regustration service port from environment variables, defaulting to 8080.
-func GetRegistrationServicePort(logger *slog.Logger) string {
+func GetRegistrationServicePort(logger *zap.Logger) string {
 	port := constants.DefaultRegistrationServicePort
 	portStr := os.Getenv(constants.RegistrationServicePortEnv)
 	if portStr != "" {
 		parsedPort, err := strconv.Atoi(portStr)
 		if err != nil {
 			logger.Error("failed to parse registration service port",
-				slog.String("env_var", constants.RegistrationServicePortEnv),
-				slog.String("err", err.Error()),
-				slog.Int("default_value", constants.DefaultRegistrationServicePort))
+				zap.String("env_var", constants.RegistrationServicePortEnv),
+				zap.Error(err),
+				zap.Int("default_value", constants.DefaultRegistrationServicePort))
 			// Continue with default value
 		} else {
 			port = parsedPort
 		}
 	} else {
 		logger.Info("registration service port not set, using default",
-			slog.String("env_var", constants.RegistrationServicePortEnv),
-			slog.String("default_value", strconv.Itoa(constants.DefaultRegistrationServicePort)))
+			zap.String("env_var", constants.RegistrationServicePortEnv),
+			zap.String("default_value", strconv.Itoa(constants.DefaultRegistrationServicePort)))
 	}
 	// Prepend ":" to form a valid address for http.Server.
 	return ":" + strconv.Itoa(port)
 }
 
-// GetRegistrationServiceIntervalTime retrieves the registration service interval from environment variables
-func GetRegistrationServiceIntervalTime(logger *slog.Logger) time.Duration {
+// GetRegistrationServiceIntervalDuration retrieves the registration service interval from environment variables
+func GetRegistrationServiceIntervalDuration(logger *zap.Logger) time.Duration {
 	intervalStr := os.Getenv(constants.DefaultRegistrationServiceIntervalInMinutesEnv)
 	interval := constants.DefaultRegistrationServiceIntervalInMinutes
 	if intervalStr != "" {
 		parsedInterval, err := strconv.Atoi(intervalStr)
 		if err != nil {
 			logger.Error("failed to parse registration service interval",
-				slog.String("env_var", constants.DefaultRegistrationServiceIntervalInMinutesEnv),
-				slog.String("err", err.Error()),
-				slog.Int("default_value", constants.DefaultRegistrationServiceIntervalInMinutes))
+				zap.String("env_var", constants.DefaultRegistrationServiceIntervalInMinutesEnv),
+				zap.Error(err),
+				zap.Int("default_value", constants.DefaultRegistrationServiceIntervalInMinutes))
 			// Continue with default value
 		} else {
 			interval = parsedInterval
 		}
 	} else {
 		logger.Info("Registration service interval not set, using default",
-			slog.String("env_var", constants.DefaultRegistrationServiceIntervalInMinutesEnv),
-			slog.Int("default_value", constants.DefaultRegistrationServiceIntervalInMinutes))
+			zap.String("env_var", constants.DefaultRegistrationServiceIntervalInMinutesEnv),
+			zap.Int("default_value", constants.DefaultRegistrationServiceIntervalInMinutes))
 	}
 	return time.Duration(interval) * time.Minute
 }
 
 // createLogger creates a new zap.Logger with the specified configuration
-func createLogger(level string, encoder string, timeEncoding string) (*slog.Logger, error) {
+func createLogger(level string, encoder string, timeEncoding string) (*zap.Logger, error) {
 	// Set defaults if not specified
 	if level == "" {
 		level = "info"
@@ -111,7 +108,8 @@ func createLogger(level string, encoder string, timeEncoding string) (*slog.Logg
 
 	// Configure encoder
 	encoderConfig := zap.NewProductionEncoderConfig()
-	encoderConfig.CallerKey = "" // omit the caller
+	encoderConfig.CallerKey = ""     // omit the caller
+	encoderConfig.StacktraceKey = "" // omit the stack trace
 
 	// Override time encoder if specified
 	switch timeEncoding {
@@ -141,28 +139,21 @@ func createLogger(level string, encoder string, timeEncoding string) (*slog.Logg
 	}
 
 	// Build the logger
-	zapLogger, err := cfg.Build()
-
-	if err != nil {
-		return nil, err
-	}
-
-	logger := zapr.NewLogger(zapLogger)
-	return slog.New(logr.ToSlogHandler(logger)), nil
+	return cfg.Build()
 }
 
 // runService starts the registration service and HTTP server
-func runService(ctx context.Context, logger *slog.Logger) error {
+func runService(ctx context.Context, logger *zap.Logger) error {
 	// Log application startup information
 	logger.Info("Application starting",
-		slog.String("app", appName),
-		slog.String("version", version),
-		slog.String("buildDate", buildDate))
+		zap.String("app", appName),
+		zap.String("version", version),
+		zap.String("buildDate", buildDate))
 
 	signalCtx, signalCancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer signalCancel()
 
-	intervalDuration := GetRegistrationServiceIntervalTime(logger)
+	intervalDuration := GetRegistrationServiceIntervalDuration(logger)
 	registrationService := registration.NewRegistrationService(logger, intervalDuration)
 
 	// Create a context with cancel function for shutdown
@@ -173,7 +164,7 @@ func runService(ctx context.Context, logger *slog.Logger) error {
 		// Add panic recovery with metrics
 		defer func() {
 			if r := recover(); r != nil {
-				logger.Error("panic in registration service", slog.Any("panic", r))
+				logger.Error("panic in registration service", zap.Any("panic", r))
 				metrics.IncrementPanicCounts()
 				logger.Info("Incremented the application Panic count metric")
 
@@ -204,12 +195,12 @@ func runService(ctx context.Context, logger *slog.Logger) error {
 	// Start the HTTP server in a goroutine
 	g.Go(func() error {
 		logger.Info("Starting HTTP server",
-			slog.String("address", server.Addr),
-			slog.Int("intervalMinutes", int(intervalDuration.Minutes())))
+			zap.String("address", server.Addr),
+			zap.Int("intervalMinutes", int(intervalDuration.Minutes())))
 
 		err := server.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("http server failed", slog.String("err", err.Error()))
+			logger.Error("http server failed", zap.Error(err))
 			return err
 		}
 		return nil
@@ -225,7 +216,7 @@ func runService(ctx context.Context, logger *slog.Logger) error {
 		defer shutdownCancel()
 
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			logger.Error("http server shutdown error", slog.String("err", err.Error()))
+			logger.Error("http server shutdown error", zap.Error(err))
 			return err
 		}
 
@@ -236,7 +227,7 @@ func runService(ctx context.Context, logger *slog.Logger) error {
 	// Wait for all goroutines to complete
 	err := g.Wait()
 	if err != nil && !errors.Is(err, context.Canceled) {
-		logger.Error("service error", slog.String("err", err.Error()))
+		logger.Error("service error", zap.Error(err))
 		return err
 	}
 
@@ -269,7 +260,7 @@ func main() {
 			// Create a basic logger for panic case
 			logger, _ := createLogger("error", "json", "rfc3339nano")
 			if logger != nil {
-				logger.Error("application panic", slog.Any("panic", r))
+				logger.Error("application panic", zap.Any("panic", r))
 			}
 			os.Exit(1)
 		}
