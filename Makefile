@@ -11,7 +11,6 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-
 # Docker image parameters
 BINARY_NAME=cc-intel-platform-registration
 VERSION ?=dev
@@ -20,17 +19,15 @@ IMG_REGISTRY ?= local
 GO_MOD_VERSION ?= 1.24.2
 IMAGE_BUILD_ARGS ?= --build-arg GO_MOD_VERSION=$(GO_MOD_VERSION) --build-arg TARGET_VERSION=${VERSION}
 IMAGE=$(IMG_REGISTRY)/cc-intel-platform-registration:$(VERSION)
+CONTAINER_DEV_RUN = $(CONTAINER_TOOL) run --rm -e LD_LIBRARY_PATH=/cc_build_dir/build/lib $(IMAGE)
 
 .PHONY: build-image
 build-image:
 	$(CONTAINER_TOOL) build -t $(IMAGE) $(IMAGE_BUILD_ARGS) .
 
-.PHONY: docker-push
+.PHONY: image-push
 image-push:
 	$(CONTAINER_TOOL) push $(IMAGE)
-
-test: mp_management sgx_platform_info
-	$(GOTEST) -v ./...
 
 clean:
 	$(GOCMD) clean
@@ -38,24 +35,34 @@ clean:
 	cd $(PWD)/third_party/mp_management && $(MAKE) clean
 	cd $(PWD)/third_party/sgx_platform_info && $(MAKE) clean
 
-
 mp_management:
 	cd $(PWD)/third_party/mp_management && $(MAKE) 
 
 sgx_platform_info:
 	cd $(PWD)/third_party/sgx_platform_info && $(MAKE) 
 
-
 deps:
 	$(GOMOD) download
 	$(GOMOD) tidy
 
-security-check:
+test: 
+	$(GOTEST) -v ./...
+
+.PHONY: vuln-check
+vuln-check: govulncheck
 	$(GOVULNCHECK) ./...
+
+.PHONY: lint-check
+lint-check: golangci-lint     ## Run golangci-lint linter
+	$(GOLANGCI_LINT) run ./...
+
+.PHONY: deadcode-check
+deadcode-check: deadcode 
+	$(DEADCODE) ./...
 
 # # Combined check target that runs all verifications
 .PHONY: check
-check: deps security-check test
+check: deps vuln-check lint-check deadcode-check test
 
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
@@ -91,22 +98,17 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
-.PHONY: lint
-lint: deadcode govulncheck golangci-lint    ## Run golangci-lint linter
-	$(GOLANGCI_LINT) run ./...
-	$(DEADCODE) ./...
+.PHONY: build-dev-image
+build-dev-image: IMAGE_BUILD_ARGS := --target builder --build-arg GO_MOD_VERSION=$(GO_MOD_VERSION) --build-arg TARGET_VERSION=dev
+build-dev-image: build-image
 
-.PHONY: lint-fix
-lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
-	$(GOLANGCI_LINT) run --fix
-
-.PHONY: lint-config
-lint-config: golangci-lint ## Verify golangci-lint linter configuration
-	$(GOLANGCI_LINT) config verify
+# Generic target to run any make command inside Docker
+.PHONY: docker-%
+docker-%: build-dev-image
+	$(CONTAINER_DEV_RUN) make $*
 
 ##@ Build
-.PHONY: build
-## Build manager binary.
+.PHONY: build ## Build manager binary.
 build: mp_management sgx_platform_info  deps fmt vet 
 	$(GOBUILD) -v \
 	-ldflags "-s -w -X 'main.version=$(VERSION)' -X 'main.buildDate=$(shell date)'" \

@@ -97,10 +97,13 @@ func (r *RegistrationService) Run(ctx context.Context) error {
 func (r *RegistrationService) CheckRegistrationStatus() {
 	statusCodeMetric, err := r.registrationChecker.Check()
 	if err != nil {
-		r.log.Error("error getting the registration status", zap.Error(err))
+		r.log.Error("unable to get the registration status", zap.Error(err))
 	}
 	r.log.Debug("Registration check completed", zap.String("status", statusCodeMetric.Status.String()))
-	r.serverMetrics.UpdateServiceStatusCodeMetric(statusCodeMetric)
+	err = r.serverMetrics.UpdateServiceStatusCodeMetric(statusCodeMetric)
+	if err != nil {
+		r.log.Error("unable to update registration service status code metric", zap.Error(err))
+	}
 }
 
 func NewRegistrationService(logger *zap.Logger, intervalDuration time.Duration) *RegistrationService {

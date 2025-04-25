@@ -24,7 +24,7 @@ type SgxPcePlatformInfo struct {
 }
 
 const (
-	SgxPcePlatformSuccess                    = 61440
+	SgxPcePlatformSuccess = 61440
 	
 	SgxPcePlatformUnexpectedError            = 61441
 	SgxPcePlatformInvalidParameterError      = 61442

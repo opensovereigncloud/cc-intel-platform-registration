@@ -1,0 +1,20 @@
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *" # run every day at midnight, utc
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    name: Delete old test images
+    permissions:
+      packages: write
+    steps:
+      - uses: snok/container-retention-policy@v3.0.0
+        with:
+          account: ${{ github.repository_owner }} 
+          token: ${{ secrets.GITHUB_TOKEN }}
+          image-names: "cc-intel-platform-registration"
+          image-tags: "!latest !v*" # target any image that isn't tagged "latest" or starting with "v"
+          cut-off: 2w
+          dry-run: false
