@@ -126,7 +126,6 @@ data:
       "version": 2,
       "weekStart": ""
     }
-
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -144,12 +143,11 @@ data:
                 "name": "prometheus",
                 "orgId": 1,
                 "type": "prometheus",
-                "url": "http://prometheus-service.monitoring.svc:9090",
+                "url": "http://prometheus-operated.monitoring.svc:9090",
                 "version": 1
             }
         ]
     }
-
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -199,7 +197,6 @@ spec:
         - name: dashboards
           configMap:
             name: grafana-dashboards
-
 ---
 apiVersion: v1
 kind: Service

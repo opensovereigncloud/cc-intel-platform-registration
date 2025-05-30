@@ -7,6 +7,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+PROMETHEUS_OPERATOR_VERSION="v0.83.0"
 K8S_DEMO_NAMESPACE="cc-intel-reg-svc-demo"
 
 check_prerequisites() {
@@ -15,6 +16,12 @@ check_prerequisites() {
   # Check kubectl (common for both deployment methods)
   if ! command -v kubectl &>/dev/null; then
     echo -e "${RED}Error: kubectl is not installed.${NC}"
+    exit 1
+  fi
+
+  # Check curl (common for both deployment methods)
+  if ! command -v curl &>/dev/null; then
+    echo -e "${RED}Error: curl is not installed.${NC}"
     exit 1
   fi
 
@@ -135,12 +142,19 @@ deploy_helm() {
     --docker-email="$REGISTRY_EMAIL" \
     --namespace $K8S_DEMO_NAMESPACE
 
+  echo -e "${YELLOW}Installing Prometheus Operator...${NC}"
+  curl -sL https://github.com/prometheus-operator/prometheus-operator/releases/download/${PROMETHEUS_OPERATOR_VERSION}/bundle.yaml | kubectl create -f -
+
+
+  kubectl wait --for=condition=Ready pods -l  app.kubernetes.io/name=prometheus-operator
+
   # Install Helm chart
   echo -e "${YELLOW}Installing Helm chart...${NC}"
   helm install reg-svc --namespace $K8S_DEMO_NAMESPACE charts/ \
     --set "fullnameOverride=reg-svc" \
     --set image.repository="$REGISTRY/cc-intel-platform-registration" \
     --set image.tag="${VERSION}" \
+    --set createPrometheusPodMonitor=true \
     --set registrationIntervalInMinutes="$CC_IPR_REGISTRATION_INTERVAL_MINUTES" \
     --set imagePullSecrets[0].name=reg-svc-pull-secret \
     --wait

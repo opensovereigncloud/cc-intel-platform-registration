@@ -14,7 +14,37 @@ fullnameOverride: ""
 
 # The CC_IPR_REGISTRATION_INTERVAL_MINUTES specifies the duration between each registration service check
 # Must be a non-zero number
-registrationIntervalInMinutes: 2
+registrationIntervalInMinutes: 60
+
+# This would create the `PodMonitor` CRD which the prometheus oeprator uses in scraping the metrics
+# Whether to create a PodMonitor resource
+createPrometheusPodMonitor: false
+
+# PodMonitor configuration
+podMonitor:
+  # Port name that exposes metrics
+  port: "metrics"
+  
+  # Metrics endpoint path
+  path: "/metrics"
+  
+  # How often to scrape metrics
+  interval: "30s"
+  
+  # Scrape timeout
+  scrapeTimeout: "10s"
+  
+  # Whether to honor labels from the target
+  honorLabels: false
+  
+  # Additional labels for the PodMonitor resource
+  labels: {}
+    # environment: production
+    # team: backend
+  
+  # Additional annotations for the PodMonitor resource
+  annotations: {}
+    # description: "Monitors my application metrics"
 
 log:
   # values: ("debug" , "info" , "warn" , "error")
