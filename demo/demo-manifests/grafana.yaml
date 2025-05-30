@@ -144,7 +144,7 @@ data:
                 "name": "prometheus",
                 "orgId": 1,
                 "type": "prometheus",
-                "url": "http://prometheus-service.monitoring.svc:9090",
+                "url": "http://prometheus-operated.monitoring.svc:9090",
                 "version": 1
             }
         ]

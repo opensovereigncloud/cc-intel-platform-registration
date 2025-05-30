@@ -1,0 +1,31 @@
+{{- if .Values.createPrometheusPodMonitor }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "cc-intel-platform-registration.fullname" . | trunc 56 | trimSuffix "-" | replace "_" "-" }}
+  labels:
+    {{- include "cc-intel-platform-registration.labels" . | nindent 4 }}
+    {{- with .Values.podMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.podMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "cc-intel-platform-registration.selectorLabels" . | nindent 6 }}
+  podMetricsEndpoints:
+  - port: {{ .Values.podMonitor.port | default "metrics" }}
+    path: {{ .Values.podMonitor.path | default "/metrics" }}
+    {{- with .Values.podMonitor.interval }}
+    interval: {{ . }}
+    {{- end }}
+    {{- with .Values.podMonitor.scrapeTimeout }}
+    scrapeTimeout: {{ . }}
+    {{- end }}
+    {{- with .Values.podMonitor.honorLabels }}
+    honorLabels: {{ . }}
+    {{- end }}
+{{- end }}
