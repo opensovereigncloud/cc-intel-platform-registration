@@ -3,12 +3,14 @@
 This repository contains the `cc-intel-platform-registration` service, which automates the registration of multi-socket SGX with the Intel SGX Registration service.
 It exposes metrics that can be visualized through Prometheus and Grafana to monitor the registration process and status.
 
+![Visualization of the CC-IPCEIS](/ipceis_diagram.jpg)
+
 ## Metrics
 
 The service exposes the following metrics via Prometheus:
 
-- Registration status (`service_status_code`): Current status code of the registration service
-- Registration Service Panic Counts (`application_panics_total`): Total number of go routines panics
+- Registration status (`service_status_code`): Current status code of the registration service.
+- Registration Service Panic Counts (`application_panics_total`): Total number of go routines panics.
 
 These metrics can be visualized through a Grafana dashboard to monitor the platform registration process.
 
@@ -16,25 +18,20 @@ These metrics can be visualized through a Grafana dashboard to monitor the platf
 
 - Helm (for Kubernetes deployment)
 - Docker and docker-compose (for local deployment)
+- EFI System Variables: `cc-intel-platform-registration` needs `read` and `write` capabilities to the host device SGX UEFI variables. 
+It must be able to mount the `/sys/firmware/efi/efivars` host path.
 
-### EFI System Requirements
+    When creating your cluster with `k3d`, you should explicitly bind the `/sys/firmware/efi/efivars` volume to your nodes:
 
-`cc-intel-platform-registration` needs read and write capabilities for SGX UEFI variables. It must be able to mount the `/sys/firmware/efi/efivars` host path.
-
-When creating your cluster with `k3d`, you should explicitly bind the `/sys/firmware/efi/efivars` volume to your nodes:
-
-```bash
-# Example: A cluster with 1 server and 2 agent nodes
-k3d cluster create my-cluster-name \
-    --agents 2 \
-    -v /sys/firmware/efi/efivars:/sys/firmware/efi/efivars@agent:0,1 \
-    -v /sys/firmware/efi/efivars:/sys/firmware/efi/efivars@server:0 
-```
-
-### SGX Device Support
-
-The service requires a `sgx.intel.com/enclave: 1` resource on Kubernetes.
-For deploying with docker-compose, it requires access to `/dev/sgx_enclave`.
+    ```bash
+    # Example: A cluster with 1 server and 2 agent nodes
+    k3d cluster create my-cluster-name \
+        --agents 2 \
+        -v /sys/firmware/efi/efivars:/sys/firmware/efi/efivars@agent:0,1 \
+        -v /sys/firmware/efi/efivars:/sys/firmware/efi/efivars@server:0 
+    ```
+- SGX Device Support: The service requires a `sgx.intel.com/enclave: 1` resource on Kubernetes. This is typically provided by a SGX plugin Daemonset. 
+For deploying with docker-compose, it requires access to `/dev/sgx_enclave` provided by the host machine.
 
 ## Installation
 
