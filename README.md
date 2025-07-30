@@ -18,20 +18,23 @@ These metrics can be visualized through a Grafana dashboard to monitor the platf
 
 - Helm (for Kubernetes deployment)
 - Docker and docker-compose (for local deployment)
-- EFI System Variables: `cc-intel-platform-registration` needs `read` and `write` capabilities to the host device SGX UEFI variables. 
-It must be able to mount the `/sys/firmware/efi/efivars` host path.
+- EFI System Variables: 
+     `cc-intel-platform-registration` needs `read` and `write` capabilities to the host device SGX UEFI variables. 
+     It must be able to mount the `/sys/firmware/efi/efivars` host path.
 
-    When creating your cluster with `k3d`, you should explicitly bind the `/sys/firmware/efi/efivars` volume to your nodes:
+     When creating your cluster with `k3d`, you should explicitly bind the `/sys/firmware/efi/efivars` volume to your nodes:
 
-    ```bash
-    # Example: A cluster with 1 server and 2 agent nodes
-    k3d cluster create my-cluster-name \
+     ```bash
+     # Example: A cluster with 1 server and 2 agent nodes
+     k3d cluster create my-cluster-name \
         --agents 2 \
         -v /sys/firmware/efi/efivars:/sys/firmware/efi/efivars@agent:0,1 \
         -v /sys/firmware/efi/efivars:/sys/firmware/efi/efivars@server:0 
-    ```
-- SGX Device Support: The service requires a `sgx.intel.com/enclave: 1` resource on Kubernetes. This is typically provided by a SGX plugin Daemonset. 
-For deploying with docker-compose, it requires access to `/dev/sgx_enclave` provided by the host machine.
+     ```
+
+- SGX Device Support: 
+     The service requires a `sgx.intel.com/enclave: 1` resource on Kubernetes. This is typically provided by a SGX plugin Daemonset. 
+     For deploying with docker-compose, it requires access to `/dev/sgx_enclave` provided by the host machine.
 
 ## Installation
 
