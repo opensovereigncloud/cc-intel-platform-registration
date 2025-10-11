@@ -1,0 +1,82 @@
+{{- if .Values.sconeSGXPlugin.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    {{- include "sconeSGXPlugin.labels" . | nindent 4 }}
+  name: sgxplugin
+spec:
+  selector:
+    matchLabels:
+      {{- include "sconeSGXPlugin.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sconeSGXPlugin.selectorLabels" . | nindent 8 }}
+      {{- with .Values.sconeSGXPlugin.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      containers:
+      - env:
+        - name: MAX_SGX_PODS
+          value: "{{ .Values.sconeSGXPlugin.maxSGXPods | default 110 }}"
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        image: {{ .Values.sconeSGXPlugin.image.repository }}:{{ .Values.sconeSGXPlugin.image.tag }}
+        imagePullPolicy: {{ .Values.sconeSGXPlugin.image.pullPolicy | default "IfNotPresent" }}
+        name: sgxdevplugin
+        {{- with .Values.sconeSGXPlugin.resources }}
+        resources:
+          {{ toYaml . | nindent 10 }}
+        {{- end }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - SYS_TIME
+            - SYS_ADMIN
+            - MKNOD
+            - NET_RAW
+            - SETFCAP
+            - SETPCAP
+            - AUDIT_WRITE
+          readOnlyRootFilesystem: true
+          seLinuxOptions:
+            type: container_device_plugin_t
+        volumeMounts:
+        - mountPath: /var/lib/kubelet/device-plugins
+          name: device-plugin
+        - mountPath: /dev
+          name: dev
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - hostPath:
+          path: /var/lib/kubelet/device-plugins
+          type: ""
+        name: device-plugin
+      - hostPath:
+          path: /dev
+          type: ""
+        name: dev
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  updateStrategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
+{{- end }}

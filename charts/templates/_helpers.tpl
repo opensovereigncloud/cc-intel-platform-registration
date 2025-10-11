@@ -51,6 +51,24 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Scone SGX plugin labels
+*/}}
+{{- define "sconeSGXPlugin.labels" -}}
+helm.sh/chart: {{ include "cc-intel-platform-registration.chart" . }}
+{{ include "sconeSGXPlugin.selectorLabels" . }}
+app.kubernetes.io/version: {{ .Values.sconeSGXPlugin.image.tag | quote }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Scone SGX plugin selector labels
+*/}}
+{{- define "sconeSGXPlugin.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "cc-intel-platform-registration.name" . }}-sgx-plugin
+app.kubernetes.io/instance: {{ .Release.Name }}-sgx-plugin
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "cc-intel-platform-registration.serviceAccountName" -}}

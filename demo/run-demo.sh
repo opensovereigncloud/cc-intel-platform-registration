@@ -157,6 +157,8 @@ deploy_helm() {
     --set createPrometheusPodMonitor=true \
     --set registrationIntervalInMinutes="$CC_IPR_REGISTRATION_INTERVAL_MINUTES" \
     --set imagePullSecrets[0].name=reg-svc-pull-secret \
+    --set sconeSGXPlugin.enabled=true \
+    --set sconeSGXPlugin.image.repository="$REGISTRY/sgx-plugin" \
     --wait
 
   # Check registration service pod

@@ -115,3 +115,19 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+sconeSGXPlugin:
+  enabled: false
+  image:
+    repository: local/sgx-plugin
+    tag: "6.0.2"
+    pullPolicy: IfNotPresent
+  podAnnotations: {}
+  maxSGXPods: 110
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
