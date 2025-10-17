@@ -152,11 +152,13 @@ deploy_helm() {
   echo -e "${YELLOW}Installing Helm chart...${NC}"
   helm install reg-svc --namespace $K8S_DEMO_NAMESPACE charts/ \
     --set "fullnameOverride=reg-svc" \
-    --set image.repository="$REGISTRY/cc-intel-platform-registration" \
+    --set image.repository="${REGISTRY}/cc-intel-platform-registration" \
     --set image.tag="${VERSION}" \
     --set createPrometheusPodMonitor=true \
     --set registrationIntervalInMinutes="$CC_IPR_REGISTRATION_INTERVAL_MINUTES" \
     --set imagePullSecrets[0].name=reg-svc-pull-secret \
+    --set sconeSGXPlugin.enabled=true \
+    --set sconeSGXPlugin.image.repository="${REGISTRY}/sgx-plugin" \
     --wait
 
   # Check registration service pod
@@ -198,7 +200,7 @@ deploy_docker_compose() {
   # register the cleanup function to be called on the EXIT signal
 
   # Create Prometheus configuration
-  cat >$WORK_DIR/prometheus.yml <<EOF
+  cat >${WORK_DIR}/prometheus.yml <<EOF
 global:
   scrape_interval: 5s
   evaluation_interval: 15s
@@ -212,7 +214,7 @@ scrape_configs:
 EOF
 
   # Create Grafana datasource configuration
-  cat >$WORK_DIR/grafana_datasources.yml <<EOF
+  cat >${WORK_DIR}/grafana_datasources.yml <<EOF
 apiVersion: 1
 
 datasources:
@@ -222,7 +224,7 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
 EOF
-  cat >$WORK_DIR/main_dashboard.yml <<EOF
+  cat >${WORK_DIR}/main_dashboard.yml <<EOF
 apiVersion: 1
 providers:
   - name: "Default"
@@ -235,7 +237,7 @@ providers:
       path: /etc/grafana/provisioning/dashboards
 EOF
 
-  cat >$WORK_DIR/reg_svc.json <<EOF
+  cat >${WORK_DIR}/reg_svc.json <<EOF
 {
   "annotations": {
     "list": [
@@ -358,10 +360,10 @@ EOF
   pushd demo
 
   if command docker compose version &>/dev/null; then
-    docker compose --env-file $WORK_DIR/.env up -d
+    docker compose --env-file ${WORK_DIR}/.env up -d
   else
     echo "Docker compose requires sudo."
-    sudo docker compose --env-file $WORK_DIR/.env up -d
+    sudo docker compose --env-file ${WORK_DIR}/.env up -d
   fi
   popd
 
