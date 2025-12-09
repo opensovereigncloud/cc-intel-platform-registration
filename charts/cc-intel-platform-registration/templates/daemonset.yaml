@@ -2,6 +2,7 @@
 {{ include "validate.encoder" .Values.log.encoder }}
 {{ include "validate.timeEncoding" .Values.log.timeEncoding }}
 {{ include "validate.interval" .Values.registrationIntervalInMinutes }}
+{{ include "validate.pccsTls" . }}
 
 apiVersion: apps/v1
 kind: DaemonSet
@@ -45,6 +46,14 @@ spec:
               value: "{{ .Values.registrationIntervalInMinutes }}"
             - name: CC_IPR_REGISTRATION_SERVICE_PORT
               value: "{{ .Values.service.port }}"
+            {{- if .Values.pccs.urls }}
+            - name: CC_PCCS_URLS
+              value: "{{ .Values.pccs.urls }}"
+            {{- end }}
+            {{- if .Values.pccs.tls.enabled }}
+            - name: CC_PCCS_CA_CERT_PATH
+              value: "{{ .Values.pccs.tls.mountPath }}"
+            {{- end }}
           ports:
             - name: metrics
               containerPort: {{ .Values.service.port }}
@@ -62,11 +71,33 @@ spec:
           volumeMounts:
             - name: efivars
               mountPath: /sys/firmware/efi/efivars
+            {{- if and .Values.pccs.tls.enabled .Values.pccs.tls.sources }}
+            {{- range $index, $source := .Values.pccs.tls.sources }}
+            - name: pccs-ca-cert-{{ $index }}
+              mountPath: {{ $.Values.pccs.tls.mountPath }}/{{ $source.subPath | default $source.key }}
+              subPath: {{ $source.key }}
+              readOnly: true
+            {{- end }}
+            {{- end }}
       volumes:
         - name: efivars
           hostPath:
             path: /sys/firmware/efi/efivars
             type: Directory
+        {{- if and .Values.pccs.tls.enabled .Values.pccs.tls.sources }}
+        {{- range $index, $source := .Values.pccs.tls.sources }}
+        - name: pccs-ca-cert-{{ $index }}
+          {{- if eq $source.type "secret" }}
+          secret:
+            secretName: {{ $source.name }}
+            optional: false
+          {{- else }}
+          configMap:
+            name: {{ $source.name }}
+            optional: false
+          {{- end }}
+        {{- end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

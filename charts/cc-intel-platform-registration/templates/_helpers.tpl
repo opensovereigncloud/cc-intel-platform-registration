@@ -109,3 +109,16 @@ Create the name of the service account to use
     {{- fail (printf "Invalid intervalInMinutes: %v. Must be a non-zero positive number." .) -}}
   {{- end -}}
 {{- end -}}
+
+{{- define "validate.pccsTls" -}}
+  {{- if .Values.pccs.tls.enabled -}}
+    {{- $sources := .Values.pccs.tls.sources -}}
+    {{- if or (not $sources) (kindIs "invalid" $sources) -}}
+      {{- fail "When pccs.tls.enabled is true, at least one certificate source must be provided in pccs.tls.sources" -}}
+    {{- else if kindIs "slice" $sources -}}
+      {{- if eq (len $sources) 0 -}}
+        {{- fail "When pccs.tls.enabled is true, pccs.tls.sources cannot be empty" -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

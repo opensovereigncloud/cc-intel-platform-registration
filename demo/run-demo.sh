@@ -150,7 +150,7 @@ deploy_helm() {
 
   # Install Helm chart
   echo -e "${YELLOW}Installing Helm chart...${NC}"
-  helm install reg-svc --namespace $K8S_DEMO_NAMESPACE charts/ \
+  helm install reg-svc --namespace $K8S_DEMO_NAMESPACE charts/cc-intel-platform-registration \
     --set "fullnameOverride=reg-svc" \
     --set image.repository="${REGISTRY}/cc-intel-platform-registration" \
     --set image.tag="${VERSION}" \

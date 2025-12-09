@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/config"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/constants"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/metrics"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/registration"
@@ -150,11 +151,24 @@ func runService(ctx context.Context, logger *zap.Logger) error {
 		zap.String("version", version),
 		zap.String("buildDate", buildDate))
 
+	// Load configuration
+	cfg, err := config.LoadRegistrationServiceConfig()
+	if err != nil {
+		logger.Fatal("Failed to load configuration", zap.Error(err))
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Log configuration (without sensitive data)
+	logger.Info("Configuration loaded",
+		zap.Int("pccsURLCount", len(cfg.PCCSURLs)),
+		zap.Bool("customCACert", cfg.PCCSCACertPath != ""),
+		zap.Duration("registrationInterval", cfg.RegistrationInterval),
+		zap.Int("servicePort", cfg.ServicePort))
+
 	signalCtx, signalCancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer signalCancel()
 
-	intervalDuration := GetRegistrationServiceIntervalDuration(logger)
-	registrationService := registration.NewRegistrationService(logger, intervalDuration)
+	registrationService := registration.NewRegistrationService(logger, cfg, cfg.RegistrationInterval)
 
 	// Create a context with cancel function for shutdown
 	g, gCtx := errgroup.WithContext(signalCtx)
@@ -196,12 +210,12 @@ func runService(ctx context.Context, logger *zap.Logger) error {
 	g.Go(func() error {
 		logger.Info("Starting HTTP server",
 			zap.String("address", server.Addr),
-			zap.Int("intervalMinutes", int(intervalDuration.Minutes())))
+			zap.Int("intervalMinutes", int(cfg.RegistrationInterval.Minutes())))
 
-		err := server.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("http server failed", zap.Error(err))
-			return err
+		serverErr := server.ListenAndServe()
+		if serverErr != nil && !errors.Is(serverErr, http.ErrServerClosed) {
+			logger.Error("http server failed", zap.Error(serverErr))
+			return serverErr
 		}
 		return nil
 	})
@@ -215,9 +229,9 @@ func runService(ctx context.Context, logger *zap.Logger) error {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer shutdownCancel()
 
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			logger.Error("http server shutdown error", zap.Error(err))
-			return err
+		if shutdownErr := server.Shutdown(shutdownCtx); shutdownErr != nil {
+			logger.Error("http server shutdown error", zap.Error(shutdownErr))
+			return shutdownErr
 		}
 
 		logger.Info("HTTP server shutdown completed")
@@ -225,10 +239,10 @@ func runService(ctx context.Context, logger *zap.Logger) error {
 	})
 
 	// Wait for all goroutines to complete
-	err := g.Wait()
-	if err != nil && !errors.Is(err, context.Canceled) {
-		logger.Error("service error", zap.Error(err))
-		return err
+	waitErr := g.Wait()
+	if waitErr != nil && !errors.Is(waitErr, context.Canceled) {
+		logger.Error("service error", zap.Error(waitErr))
+		return waitErr
 	}
 
 	logger.Info("Service shutdown complete")

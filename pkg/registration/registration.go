@@ -2,10 +2,12 @@ package registration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	mpmanagement "github.com/opensovereigncloud/cc-intel-platform-registration/internal/pkg/mp_management"
 	sgxplatforminfo "github.com/opensovereigncloud/cc-intel-platform-registration/internal/pkg/sgx_platform_info"
+	config "github.com/opensovereigncloud/cc-intel-platform-registration/pkg/config"
 	intelservices "github.com/opensovereigncloud/cc-intel-platform-registration/pkg/intel_services"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/metrics"
 	"go.uber.org/zap"
@@ -16,21 +18,29 @@ type RegistrationChecker interface {
 	Check() (metrics.StatusCodeMetric, error)
 }
 
-func NewRegistrationChecker(logger *zap.Logger) *DefaultRegistrationChecker {
+func NewRegistrationChecker(logger *zap.Logger, cfg *config.RegistrationServiceConfig, metricsRegistry *metrics.RegistrationServiceMetricsRegistry) *DefaultRegistrationChecker {
 	return &DefaultRegistrationChecker{
-		log: logger,
+		log:              logger,
+		regServiceConfig: cfg,
+		metricsRegistry:  metricsRegistry,
 	}
 }
 
 type DefaultRegistrationChecker struct {
-	log *zap.Logger
+	log              *zap.Logger
+	regServiceConfig *config.RegistrationServiceConfig
+	metricsRegistry  *metrics.RegistrationServiceMetricsRegistry
 }
 
 func (rc *DefaultRegistrationChecker) Check() (metrics.StatusCodeMetric, error) {
 	mp := mpmanagement.NewMPManagement()
 	defer mp.Close()
 
-	intelService := intelservices.NewIntelService(rc.log)
+	intelService, err := intelservices.NewIntelService(rc.log, rc.regServiceConfig)
+	if err != nil {
+		return metrics.StatusCodeMetric{Status: metrics.UnknownError},
+			fmt.Errorf("failed to create intel service: %w", err)
+	}
 
 	isMachineRegistered, err := mp.IsMachineRegistered()
 	if err != nil {
@@ -42,7 +52,8 @@ func (rc *DefaultRegistrationChecker) Check() (metrics.StatusCodeMetric, error) 
 		if platManErr != nil {
 			return metrics.StatusCodeMetric{Status: metrics.SgxUefiUnavailable}, platManErr
 		}
-		metric, regErr := intelService.RegisterPlatform(plaformManifest)
+		// Pass metrics registry to RegisterPlatform
+		metric, regErr := intelService.RegisterPlatform(plaformManifest, rc.metricsRegistry)
 
 		// registration was successful
 		if metric.Status == metrics.PlatformRebootNeeded {
@@ -52,7 +63,6 @@ func (rc *DefaultRegistrationChecker) Check() (metrics.StatusCodeMetric, error) 
 			}
 		}
 		return metric, regErr
-
 	}
 
 	platformInfo, err := sgxplatforminfo.GetSgxPcePlatformInfo()
@@ -60,7 +70,8 @@ func (rc *DefaultRegistrationChecker) Check() (metrics.StatusCodeMetric, error) 
 		return metrics.StatusCodeMetric{Status: metrics.RetryNeeded}, err
 	}
 
-	metric, err := intelService.RetrievePCK(platformInfo)
+	// Pass metrics registry to RetrievePCK
+	metric, err := intelService.RetrievePCK(platformInfo, rc.metricsRegistry)
 	return metric, err
 }
 
@@ -106,10 +117,12 @@ func (r *RegistrationService) CheckRegistrationStatus() {
 	}
 }
 
-func NewRegistrationService(logger *zap.Logger, intervalDuration time.Duration) *RegistrationService {
+func NewRegistrationService(logger *zap.Logger, cfg *config.RegistrationServiceConfig, intervalDuration time.Duration) *RegistrationService {
+	metricsRegistry := metrics.NewRegistrationServiceMetricsRegistry(logger)
+
 	registrationService := &RegistrationService{
-		serverMetrics:       metrics.NewRegistrationServiceMetricsRegistry(logger),
-		registrationChecker: NewRegistrationChecker(logger),
+		serverMetrics:       metricsRegistry,
+		registrationChecker: NewRegistrationChecker(logger, cfg, metricsRegistry),
 		log:                 logger,
 		intervalDuration:    intervalDuration,
 	}
