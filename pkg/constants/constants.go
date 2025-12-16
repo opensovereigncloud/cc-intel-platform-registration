@@ -14,5 +14,5 @@ const PCCSCACertPathEnv = "CC_PCCS_CA_CERT_PATH" // Directory path for custom CA
 
 // Intel endpoint constants (used as fallback)
 const IntelPlatformRegistrationEndpoint = "https://api.trustedservices.intel.com/sgx/registration/v1/platform"
-const IntelPckRetrievalEndpoint = "https://api.trustedservices.intel.com/sgx/certification/v4/pckcerts"
+const IntelPckRetrievalEndpoint = "https://api.trustedservices.intel.com/sgx/certification/v4/pckcert"
 const IntelRequestTimeout = 2 * time.Minute

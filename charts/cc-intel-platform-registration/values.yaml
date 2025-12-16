@@ -22,14 +22,6 @@ pccs:
   # Comma-separated list of PCCS base URLs (must use HTTPS)
   # Example: "https://pccs1.example.com,https://pccs2.example.com"
   #
-  # IMPORTANT - Endpoint routing behavior:
-  # 1. Platform registration (/sgx/registration/v1/platform):
-  #    - Always goes directly to Intel API (hardcoded)
-  #    - PCCS does not support this endpoint
-  # 2. PCK certificate retrieval (/sgx/certification/v4/pckcerts):
-  #    - Tries PCCS endpoints first (if configured)
-  #    - Falls back to Intel API if PCCS fails or is not configured
-  #
   # If urls is empty, both operations go directly to Intel API
   urls: ""
 

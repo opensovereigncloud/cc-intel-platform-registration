@@ -150,12 +150,12 @@ sequenceDiagram
         end
 
         alt Intel PCCS configured
-            cc_ipr->>+pccs: GET https://<Intel PCCS Address>/sgx/certification/v4/pckcerts (body: Encrypted PPID, PCEID)
+            cc_ipr->>+pccs: GET https://<Intel PCCS Address>/sgx/certification/v4/pckcert (params: Encrypted PPID, PCEID, QEID, PCESVN, CPUSVN)
                 note right of cc_ipr: The Intel PCCS sends the request to the Intel PCS if no PCK Cert has been cached for the given platform yet
                 note right of cc_ipr: The Intel PCS returns the PCK Cert if the Intel RS has cached the platform keys (aka. Direct Registration)
             pccs-->>-cc_ipr: JSON data structure containing a collection of PCK Certs
         else
-            cc_ipr->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcerts (body: Encrypted PPID, PCEID)
+            cc_ipr->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcert (params: Encrypted PPID, PCEID, PCESVN, CPUSVN)
                 note right of cc_ipr: Returns the PCK Cert if the Intel RS has cached the platform keys (aka. Direct Registration)
             pcs-->>-cc_ipr: JSON data structure containing a collection of PCK Certs
         end

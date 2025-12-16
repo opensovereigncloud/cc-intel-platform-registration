@@ -13,10 +13,12 @@ import (
 
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/config"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/constants"
+	"github.com/spf13/pflag"
+
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/metrics"
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/registration"
+
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
@@ -296,5 +298,4 @@ func main() {
 	if err != nil {
 		os.Exit(1)
 	}
-
 }

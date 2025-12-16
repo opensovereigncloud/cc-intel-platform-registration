@@ -159,7 +159,7 @@ func buildEndpoints(cfg *config.RegistrationServiceConfig, logger *zap.Logger) *
 			zap.Int("count", len(cfg.PCCSURLs)))
 		for _, baseURL := range cfg.PCCSURLs {
 			endpoints.pckRetrievalURLs = append(endpoints.pckRetrievalURLs,
-				baseURL+"/sgx/certification/v4/pckcerts")
+				baseURL+"/sgx/certification/v4/pckcert")
 		}
 	}
 
@@ -247,7 +247,7 @@ func (r *IntelService) registerPlatformToEndpoint(url string, platformManifest m
 
 // RetrievePCK attempts to retrieve PCK certificate
 // It tries each endpoint in order (PCCS first, then Intel) until one succeeds
-func (r *IntelService) RetrievePCK(platformInfo *sgxplatforminfo.SgxPcePlatformInfo, metricsRegistry *metrics.RegistrationServiceMetricsRegistry) (metrics.StatusCodeMetric, error) {
+func (r *IntelService) RetrievePCK(platformInfo *sgxplatforminfo.SgxPlatformInfo, metricsRegistry *metrics.RegistrationServiceMetricsRegistry) (metrics.StatusCodeMetric, error) {
 	var lastErr error
 	var lastMetric metrics.StatusCodeMetric
 
@@ -258,12 +258,15 @@ func (r *IntelService) RetrievePCK(platformInfo *sgxplatforminfo.SgxPcePlatformI
 		if isPCCS {
 			endpointType = "pccs"
 		}
+		requestURL := fmt.Sprintf("%s?encrypted_ppid=%s&pceid=%s&cpusvn=%s&pcesvn=%s",
+			baseURL, platformInfo.EncryptedPPID, platformInfo.PCEInfo.PCEID, platformInfo.CpuSvn, platformInfo.PCEInfo.PCEisvsvn)
 
-		requestURL := fmt.Sprintf("%s?encrypted_ppid=%s&pceid=%s",
-			baseURL, platformInfo.EncryptedPPID, platformInfo.PCEInfo.PCEID)
+		if isPCCS {
+			requestURL += fmt.Sprintf("&qeid=%s", platformInfo.QeId)
+		}
 
 		r.log.Debug("Attempting PCK retrieval",
-			zap.String("url", requestURL),
+			zap.String("url", baseURL),
 			zap.String("endpointType", endpointType),
 			zap.Int("attemptNumber", i+1))
 
@@ -272,7 +275,7 @@ func (r *IntelService) RetrievePCK(platformInfo *sgxplatforminfo.SgxPcePlatformI
 		// Success - return immediately
 		if err == nil && metric.Status == metrics.PlatformDirectlyRegistered {
 			r.log.Info("PCK retrieval successful",
-				zap.String("url", requestURL),
+				zap.String("url", baseURL),
 				zap.String("endpointType", endpointType),
 				zap.Int("attemptNumber", i+1))
 
@@ -284,7 +287,7 @@ func (r *IntelService) RetrievePCK(platformInfo *sgxplatforminfo.SgxPcePlatformI
 		lastMetric = metric
 
 		r.log.Warn("PCK retrieval failed, trying next endpoint",
-			zap.String("url", requestURL),
+			zap.String("url", baseURL),
 			zap.String("endpointType", endpointType),
 			zap.Error(err))
 	}

@@ -1,3 +1,12 @@
+/*
+ * SGX Platform Information Retrieval Library
+ *
+ * This library provides functionality to retrieve SGX platform information including:
+ * - Encrypted PPID (Platform Provisioning ID)
+ * - PCE (Provisioning Certification Enclave) information
+ * - CPU SVN (Security Version Number)
+ * - QE (Quoting Enclave) ID
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,14 +18,21 @@
 #include "sgx_error.h"
 #include "Enclave_u.h"
 #include "sgx_platform_info.h"
+
 #define MAX_ENCRYPTED_PPID_SIZE 384
 #define PUBLIC_KEY_SIZE 388
-/* Crypto_suite */
+
+/* Crypto suite identifier for RSA OAEP 3072 */
 #define PCE_ALG_RSA_OAEP_3072 1
 
-/* Signature_scheme */
+/* Signature scheme identifier for NIST P256 ECDSA SHA256 */
 #define PCE_NIST_P256_ECDSA_SHA256 0
 
+/*
+ * Intel PPID Encryption Key (PPIDEK)
+ * This is the public key used by Intel to encrypt the Platform Provisioning ID.
+ * The encrypted PPID can only be decrypted by Intel's backend services.
+ */
 static const uint8_t INTEL_PPIDEK[PUBLIC_KEY_SIZE] = {
     0xd3, 0x96, 0xf9, 0x43, 0x43, 0x11, 0x00, 0x1c, 0x69, 0x44, 0x9c,
     0x3b, 0xfd, 0xee, 0x8f, 0x38, 0xcd, 0x95, 0xcd, 0xad, 0x74, 0x09,
@@ -57,69 +73,93 @@ static const uint8_t INTEL_PPIDEK[PUBLIC_KEY_SIZE] = {
 
 using namespace std;
 
-static bool create_app_enclave_report(sgx_report_t *app_report)
+static bool load_enclave(sgx_enclave_id_t *p_eid)
 {
-
     bool ret = true;
-    uint32_t retval = 0;
     sgx_status_t sgx_status = SGX_SUCCESS;
-    sgx_enclave_id_t eid = 0;
     int launch_token_updated = 0;
     sgx_launch_token_t launch_token = {0};
+
+    sgx_status = sgx_create_enclave(
+        SGX_PLATFORM_INFO_ENCLAVE_PATH,
+        0,
+        &launch_token,
+        &launch_token_updated,
+        p_eid,
+        NULL);
+
+    if (SGX_SUCCESS != sgx_status)
+    {
+        fprintf(stderr, "Error: Failed to create enclave. SGX Error: 0x%04x\n", sgx_status);
+        ret = false;
+    }
+
+    return ret;
+}
+
+/**
+ * get_platform_info - Retrieve SGX platform information
+ *
+ * This function collects comprehensive platform information including:
+ * - Encrypted PPID (encrypted with Intel's public key)
+ * - PCE information (ID and ISV SVN)
+ * - CPU Security Version Number
+ * - Quoting Enclave ID (platform-specific identifier)
+ *
+ * @platform_info: [OUT] Pointer to platform_info_t structure to fill
+ *
+ * Returns: 0 on success, error code on failure
+ */
+extern "C" u_int32_t get_platform_info(platform_info_t *platform_info)
+{
+    /* Variables for SGX operations */
+    sgx_report_t app_report = {0};
+    uint32_t retval = 0;
+    sgx_status_t ecall_ret = SGX_SUCCESS;
+    sgx_status_t sgx_status = SGX_SUCCESS;
+
+    /* Platform identifiers */
+    sgx_key_128bit_t qe_id = {0};
+
+    /* Enclave and PCE info */
+    sgx_enclave_id_t id_enclave_eid = 0;
     sgx_target_info_t pce_target_info = {0};
-
     sgx_isv_svn_t p_isvsvn = {0};
+    uint8_t signature_scheme;
 
+    /* Status tracking */
     sgx_pce_error_t pce_ret = SGX_PCE_SUCCESS;
+    sgx_pce_error_t pce_status = SGX_PCE_SUCCESS;
 
     pce_ret = sgx_pce_get_target(&pce_target_info, &p_isvsvn);
     if (SGX_PCE_SUCCESS != pce_ret)
     {
-        ret = false;
+        fprintf(stderr, "Error: Failed to get PCE target info. PCE Error: 0x%04x\n", pce_ret);
+        pce_status = pce_ret;
         goto CLEANUP;
     }
 
-    sgx_status = sgx_create_enclave(ENCLAVE_PATH,
-                                    0,
-                                    &launch_token,
-                                    &launch_token_updated,
-                                    &eid,
-                                    NULL);
-    if (SGX_SUCCESS != sgx_status)
+    if (!load_enclave(&id_enclave_eid))
     {
-        ret = false;
-        goto CLEANUP;
+        fprintf(stderr, "Error: Failed to load sgx platform info enclave\n");
+        return ENCLAVE_CREATE_FAIL;
     }
 
-    sgx_status = enclave_create_report(eid,
-                                       &retval,
-                                       &pce_target_info,
-                                       app_report);
+    sgx_status = enclave_create_report(
+        id_enclave_eid,
+        &retval,
+        &pce_target_info,
+        &app_report);
 
     if ((SGX_SUCCESS != sgx_status) || (0 != retval))
     {
-        ret = false;
+        fprintf(stderr, "Error: Failed to create enclave report. SGX Error: 0x%04x, Retval: %u\n",
+                sgx_status, retval);
+        pce_status = SGX_PCE_UNEXPECTED;
         goto CLEANUP;
     }
 
-CLEANUP:
-    sgx_destroy_enclave(eid);
-    return ret;
-}
-
-extern "C" u_int32_t get_platform_info(platform_info_t *platform_info)
-{
-
-    sgx_report_t app_report = {0};
-    uint32_t encrypted_ppid_out_size;
-    uint8_t signature_scheme;
-
-    if (!create_app_enclave_report(&app_report))
-    {
-
-        return ENCLAVE_CREATE_FAIL;
-    }
-    sgx_pce_error_t pce_status = sgx_get_pce_info(
+    pce_status = sgx_get_pce_info(
         &app_report,
         INTEL_PPIDEK,
         PUBLIC_KEY_SIZE,
@@ -130,6 +170,38 @@ extern "C" u_int32_t get_platform_info(platform_info_t *platform_info)
         &platform_info->pce_info.pce_isv_svn,
         &platform_info->pce_info.pce_id,
         &signature_scheme);
+
+    if (SGX_PCE_SUCCESS != pce_status)
+    {
+        fprintf(stderr, "Error: Failed to get PCE info. PCE Error: 0x%04x\n", pce_status);
+        goto CLEANUP;
+    }
+
+    sgx_status = ide_get_id(id_enclave_eid, &ecall_ret, &qe_id);
+    if (SGX_SUCCESS != sgx_status)
+    {
+        fprintf(stderr, "Error: Failed to call ide_get_id. SGX Error: 0x%04x\n", sgx_status);
+        pce_status = SGX_PCE_UNEXPECTED;
+        goto CLEANUP;
+    }
+
+    if (SGX_SUCCESS != ecall_ret)
+    {
+        fprintf(stderr, "Error: Failed to get QE ID. Enclave Error: 0x%04x\n", ecall_ret);
+        pce_status = SGX_PCE_UNEXPECTED;
+        goto CLEANUP;
+    }
+
+    memcpy(platform_info->qe_id, &qe_id, QE_ID_SIZE);
+
+    memcpy(platform_info->cpu_svn, app_report.body.cpu_svn.svn, CPU_SVN_SIZE);
+
+CLEANUP:
+    /* Clean up enclave resources */
+    if (id_enclave_eid != 0)
+    {
+        sgx_destroy_enclave(id_enclave_eid);
+    }
 
     return pce_status;
 }

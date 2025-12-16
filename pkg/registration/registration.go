@@ -65,7 +65,7 @@ func (rc *DefaultRegistrationChecker) Check() (metrics.StatusCodeMetric, error) 
 		return metric, regErr
 	}
 
-	platformInfo, err := sgxplatforminfo.GetSgxPcePlatformInfo()
+	platformInfo, err := sgxplatforminfo.GetSgxPlatformInfo()
 	if err != nil {
 		return metrics.StatusCodeMetric{Status: metrics.RetryNeeded}, err
 	}

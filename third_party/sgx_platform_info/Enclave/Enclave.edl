@@ -36,8 +36,8 @@ enclave {
 
     trusted {
         /* define ECALLs here. */
+        public sgx_status_t ide_get_id([out]sgx_key_128bit_t *p_id);
         public uint32_t enclave_create_report([in]const sgx_target_info_t* p_qe3_target,
                                               [out]sgx_report_t* p_report);
     };
 };
-
