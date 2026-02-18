@@ -5,7 +5,7 @@ set -e
 # Configuration
 IMAGE_NAME="cc-intel-platform-registration-dev"
 VERSION="dev"
-GO_MOD_VERSION="1.25.5"
+GO_MOD_VERSION="1.26.0"
 CONTAINER_NAME="cc-intel-platform-registration-dev"
 
 # Colors for output
