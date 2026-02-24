@@ -21,6 +21,7 @@ endif
 ######## Shared Library Settings ########
 LIB_NAME := libsgx_platform_info.so
 INCLUDE_DIR := include
+ENCLAVE_DIR := /opt/cc-intel-platform-registration
 BUILD_DIR = ../../build
 LIB_DIR = $(BUILD_DIR)/lib
 
@@ -172,16 +173,18 @@ Lib_Link_Flags := -shared $(SGX_COMMON_CFLAGS) \
     -ldl -lpthread
 
 dirs:
-	@mkdir -p $(INCLUDE_DIR) $(LIB_DIR)
+	@mkdir -p $(INCLUDE_DIR) $(LIB_DIR) $(ENCLAVE_DIR)
 
 $(LIB_DIR)/$(LIB_NAME): src/Enclave_u.o $(sgx_platform_info_Cpp_Objects)  
 	$(CXX) $(sgx_platform_info_Cpp_Flags) -shared -o $@ $^ $(sgx_platform_info_Link_Flags)
 	@cp $(Signed_Enclave_Name) $(LIB_DIR)/
+	@cp $(Signed_Enclave_Name) $(ENCLAVE_DIR)/
 
 
 clean:
-	@rm -f $(sgx_platform_info_Name) $(Enclave_Name) $(Signed_Enclave_Name)
+	@rm -f $(sgx_platform_info_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(Enclave_Test_Key)
 	@rm -f src/Enclave_u.* src/*.o
 	@rm -f Enclave/Enclave_t.* Enclave/*.o
 	@rm -f .config_*
 	@rm -rf $(LIB_DIR) $(INCLUDE_DIR)
+	

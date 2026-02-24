@@ -5,7 +5,10 @@ extern "C"
 {
 #endif
 #define MAX_ENCRYPTED_PPID_SIZE 384
-#define ENCLAVE_PATH "/opt/cc-intel-platform-registration/sgx_platform_enclave.signed.so"
+#define QE_ID_SIZE 16
+#define CPU_SVN_SIZE 16
+
+#define SGX_PLATFORM_INFO_ENCLAVE_PATH "/opt/cc-intel-platform-registration/sgx_platform_enclave.signed.so"
 #include "sgx_pce.h"
 
 #define GET_PLATFORM_MK_ERROR(x) (0x0000F000 | (x))
@@ -13,6 +16,8 @@ extern "C"
     {
         /* Enclave creation Failed */
         ENCLAVE_CREATE_FAIL = GET_PLATFORM_MK_ERROR(0x0009),
+        GET_QE_ID_FAIL = GET_PLATFORM_MK_ERROR(0x000a),
+
     } get_plaform_error_t;
 
     typedef struct _platform_info_t
@@ -20,6 +25,8 @@ extern "C"
         sgx_pce_info_t pce_info;
         uint32_t encrypted_ppid_out_size;
         uint8_t encrypted_ppid[MAX_ENCRYPTED_PPID_SIZE];
+        uint8_t qe_id[QE_ID_SIZE];
+        uint8_t cpu_svn[CPU_SVN_SIZE];
     } platform_info_t;
     /*
 

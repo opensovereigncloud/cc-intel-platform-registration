@@ -12,12 +12,14 @@ This has the advantage that we don't need to handle the persistence of the platf
 One can check if the direct registration was performed by checking the `Key Caching Policy` property of a PCK Cert [3].
 
 To retrieve the PCK Certificate of a platform after it was registered with the Intel Registration service, necessary to carry out a successful attestation procedure by verifying quotes, one has to retrieve two pieces of information from the respective platform:
-(1) its Provisioning Certification Enclave (PCE) ID; and 
+(1) its Provisioning Certification Enclave (PCE) ID; and
 (2) an encrypted PPID which is derived by the PCE from the respective platform keys.
 The PCE is an Intel SGX architectural enclave that uses a PCK to sign REPORT structures for Provisioning or Quoting Enclaves.
 These signed REPORTS contain the ReportData indicating that attestation keys or provisioning protocol messages are created on genuine SGX hardware [2].
 
 The outcome of a successful platform registration with Intel is the capability to retrieve the platform's PCK Certificate from the Intel Platform Certification Service (PCS).
+To increase availability, one might configure Intel PCS attestation-collaterals requests to go through the Intel Provisioning Certificate Caching Service (PCCS) [4] which caches the retrieved data structures.
+The Intel PCCS exposes similar HTTPS interfaces as the Intel PCS.
 
 [^1]: *shared* is relevant in the context of multi-package platforms (i.e., multiple CPUs) where the CPUs negotiate the platform key to use.
 
@@ -31,15 +33,16 @@ The platform registration service keeps a status code described below.
 
 ### Prometheus Implementation
 
-To implement the status code above, we use [Prometheus Gauge Metric](https://prometheus.io/docs/concepts/metric_types/#gauge) `service_status_code`, and attach to it two [labels](https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels): 
+To implement the status code above, we use [Prometheus Gauge Metric](https://prometheus.io/docs/concepts/metric_types/#gauge) `service_status_code`, and attach to it two [labels](https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels):
+
 - `http_status_code`: to represent the HTTP status code returned by the performed HTTP request
-- `intel_error_code`: a string, e.g. `InvalidRequestSyntax`, taken as-is, when available, from the Intel service reply's error code 
+- `intel_error_code`: a string, e.g. `InvalidRequestSyntax`, taken as-is, when available, from the Intel service reply's error code
 
 ### Semantics
 
 - `0X`: Registration status
   - `00`: Pending execution
-  - `01`: SGX UEFI variables not available 
+  - `01`: SGX UEFI variables not available
   - `02`: Impossible to determine the registration status; please reattempt
     - MIGHT contain metric label `http_status_code`
     - MIGHT contain metric label `intel_error_code`
@@ -102,6 +105,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant cc_ipr as CC Intel Platform Registration
+    participant pccs as SGX Platform Certificate Caching Service (PCCS)
     participant pcs as SGX Platform Certification Service (PCS)
     participant pce as SGX Provisioning Certification Enclave (PCE)
 
@@ -145,9 +149,16 @@ sequenceDiagram
             cc_ipr->>cc_ipr: Return status code 02
         end
 
-        cc_ipr->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcerts (body: Encrypted PPID, PCEID)
-            note right of cc_ipr: Returns the PCK Cert if the Intel RS has cached the platform keys (aka. Direct Registration)
-        pcs-->>-cc_ipr: JSON data structure containing a collection of PCK Certs
+        alt Intel PCCS configured
+            cc_ipr->>+pccs: GET https://<Intel PCCS Address>/sgx/certification/v4/pckcert (params: Encrypted PPID, PCEID, QEID, PCESVN, CPUSVN)
+                note right of cc_ipr: The Intel PCCS sends the request to the Intel PCS if no PCK Cert has been cached for the given platform yet
+                note right of cc_ipr: The Intel PCS returns the PCK Cert if the Intel RS has cached the platform keys (aka. Direct Registration)
+            pccs-->>-cc_ipr: JSON data structure containing a collection of PCK Certs
+        else
+            cc_ipr->>+pcs: GET https://api.trustedservices.intel.com/sgx/certification/v4/pckcert (params: Encrypted PPID, PCEID, PCESVN, CPUSVN)
+                note right of cc_ipr: Returns the PCK Cert if the Intel RS has cached the platform keys (aka. Direct Registration)
+            pcs-->>-cc_ipr: JSON data structure containing a collection of PCK Certs
+        end
 
         alt HTTP Status Code 200
             cc_ipr->>cc_ipr: Return status code 09
@@ -213,13 +224,14 @@ sequenceDiagram
 
 ## Artifacts
 
-* *Platform manifest*: A BLOB containing the encrypted shared platform keys used to register the SGX platform with the Intel Registration Service
-* *PPID*: Unique Platform Provisioning ID of the processor package or platform instance used by Provisioning Certification Enclave. The PPID does not depend on the TCB.
-* *PCEID*: Identifier of the Intel SGX enclave that uses Provisioning Certification Key to sign proofs that attestation keys or attestation key provisioning protocol messages are created on genuine hardware
-* *PCK Cert*: X.509 certificate binding the PCE's key pair to a certain SGX TCB state
+- *Platform manifest*: A BLOB containing the encrypted shared platform keys used to register the SGX platform with the Intel Registration Service
+- *PPID*: Unique Platform Provisioning ID of the processor package or platform instance used by Provisioning Certification Enclave. The PPID does not depend on the TCB.
+- *PCEID*: Identifier of the Intel SGX enclave that uses Provisioning Certification Key to sign proofs that attestation keys or attestation key provisioning protocol messages are created on genuine hardware
+- *PCK Cert*: X.509 certificate binding the PCE's key pair to a certain SGX TCB state
 
 ## References
 
 1. [Intel RS and Intel PCS API Specification](https://api.portal.trustedservices.intel.com/content/documentation.html)
 2. [Intel SGX DCAP Multipackage SW](https://download.01.org/intel-sgx/sgx-dcap/1.9/linux/docs/Intel_SGX_DCAP_Multipackage_SW.pdf)
 3. [SGX PCK Certificate Specification](https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/SGX_PCK_Certificate_CRL_Spec-1.4.pdf)
+4. [Intel PCCS Repository](https://github.com/opensovereigncloud/SGXDataCenterAttestationPrimitives/tree/main/QuoteGeneration/pccs)

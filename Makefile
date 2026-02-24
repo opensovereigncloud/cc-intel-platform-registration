@@ -16,7 +16,7 @@ BINARY_NAME=cc-intel-platform-registration
 VERSION ?=dev
 CONTAINER_TOOL ?= docker
 IMG_REGISTRY ?= local
-GO_MOD_VERSION ?= 1.25.2
+GO_MOD_VERSION ?= 1.26.0
 IMAGE_BUILD_ARGS ?= --build-arg GO_MOD_VERSION=$(GO_MOD_VERSION) --build-arg TARGET_VERSION=${VERSION}
 IMAGE=$(IMG_REGISTRY)/cc-intel-platform-registration:$(VERSION)
 CONTAINER_DEV_RUN = $(CONTAINER_TOOL) run --rm -e LD_LIBRARY_PATH=/cc_build_dir/build/lib $(IMAGE)

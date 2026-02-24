@@ -16,6 +16,49 @@ fullnameOverride: ""
 # Must be a non-zero number
 registrationIntervalInMinutes: 60
 
+# PCCS (Provisioning Certificate Caching Service) configuration
+pccs:
+  # Optional PCCS URLs for PCK certificate retrieval caching
+  # Comma-separated list of PCCS base URLs (must use HTTPS)
+  # Example: "https://pccs1.example.com,https://pccs2.example.com"
+  #
+  # If urls is empty, both operations go directly to Intel API
+  urls: ""
+
+  # TLS certificate configuration for PCCS
+  # System CA bundle is ALWAYS used (required for Intel API which uses public certificates)
+  # Custom CA certificates can be optionally provided for PCCS servers with self-signed certs
+  tls:
+    # Enable custom CA certificates for PCCS with self-signed certificates
+    # If your PCCS uses a publicly-trusted certificate, leave this disabled
+    # If your PCCS uses a self-signed cert or custom CA, set enabled: true
+    enabled: false
+
+    # CA certificate sources - supports multiple certificates for multiple PCCS servers
+    # All .crt files from mountPath directory will be loaded and added to system CA pool
+    #
+    # Single PCCS server with cert-manager CA (typical for cc-intel-pccs integration):
+    sources:
+      - type: "secret" # "configMap" or "secret" - prefer "secret" for production
+        name: "pccs-ca-secret" # Name of Secret containing CA certificate
+        key: "ca.crt"
+        subPath: "pccs-ca.crt" # Mounted as /etc/ssl/pccs-certs/pccs-ca.crt
+
+    # Multiple PCCS servers with different CAs:
+    # sources:
+    #   - type: "secret"
+    #     name: "pccs1-ca-secret"
+    #     key: "ca.crt"
+    #     subPath: "pccs1-ca.crt"
+    #   - type: "secret"
+    #     name: "pccs2-ca-secret"
+    #     key: "ca.crt"
+    #     subPath: "pccs2-ca.crt"
+
+    # Directory where CA certificates are mounted
+    # Application loads all *.crt files from this directory and adds them to system CA pool
+    mountPath: "/etc/ssl/pccs-certs"
+
 # This would create the `PodMonitor` CRD which the prometheus oeprator uses in scraping the metrics
 # Whether to create a PodMonitor resource
 createPrometheusPodMonitor: false
@@ -24,24 +67,24 @@ createPrometheusPodMonitor: false
 podMonitor:
   # Port name that exposes metrics
   port: "metrics"
-  
+
   # Metrics endpoint path
   path: "/metrics"
-  
+
   # How often to scrape metrics
   interval: "30s"
-  
+
   # Scrape timeout
   scrapeTimeout: "10s"
-  
+
   # Whether to honor labels from the target
   honorLabels: false
-  
+
   # Additional labels for the PodMonitor resource
   labels: {}
     # environment: production
     # team: backend
-  
+
   # Additional annotations for the PodMonitor resource
   annotations: {}
     # description: "Monitors my application metrics"
@@ -70,7 +113,7 @@ podSecurityContext: {}
 
 securityContext:
   # Only root users can write to the SGX UEFI Variables
-  runAsUser: 0 
+  runAsUser: 0
   privileged: true
   runAsNonRoot: false
   capabilities:
@@ -86,8 +129,7 @@ service:
 ingress:
   enabled: false
   className: ""
-  annotations:
-    {}
+  annotations: {}
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
   hosts:
