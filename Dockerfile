@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:24.04 AS builder
 
 WORKDIR /root
 
@@ -33,7 +33,7 @@ RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx.gpg] https://d
     libsgx-pce-logic
 
 # Install SGX SDK
-ARG SGX_SDK_URL=https://download.01.org/intel-sgx/sgx-linux/2.26/distro/ubuntu22.04-server/sgx_linux_x64_sdk_2.26.100.0.bin
+ARG SGX_SDK_URL=https://download.01.org/intel-sgx/sgx-linux/2.30/distro/ubuntu24.04-server/sgx_linux_x64_sdk_2.30.100.1.bin
 
 RUN wget ${SGX_SDK_URL} && \
     export SGX_SDK_INSTALLER=$(basename $SGX_SDK_URL) && \
@@ -61,12 +61,12 @@ COPY . .
 
 RUN make VERSION=${TARGET_VERSION} build
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 RUN apt-get update && \
     apt-get install -y \
     wget \
-    gnupg-agent
+    gnupg
 
 # Add 01.org to apt for SGX packages and install SGX runtime components
 RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx.gpg] https://download.01.org/intel-sgx/sgx_repo/ubuntu jammy main" \ 

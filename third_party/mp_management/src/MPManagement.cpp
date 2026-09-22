@@ -36,16 +36,18 @@
  * the ability to configure, collect data and collect status of the
  * SGX MP platform.
  */
-#include <string.h>
-#include "include/MPUefi.h"
-#include "include/MPManagement.h"
 
-MPManagement::MPManagement()
+#include <string.h>
+#include "MPUefi.h"
+#include "MPManagement.h"
+#include "logger.h"
+
+MPManagement::MPManagement(string uefi_path, LogLevel logLevel)
 {
-    m_mpuefi = new MPUefi();
+    m_mpuefi = new MPUefi(initUefi(std::move(uefi_path), logLevel));
 }
 
-MpResult MPManagement::getRegistrationStatus(MpMachineRegistrationStatus &status)
+MpResult MPManagement::getRegistrationStatus(MpTaskStatus &status)
 {
     MpRegistrationStatus regStatus;
     MpResult res = MP_UNEXPECTED_ERROR;
@@ -60,11 +62,11 @@ MpResult MPManagement::getRegistrationStatus(MpMachineRegistrationStatus &status
 
         if (regStatus.registrationStatus)
         {
-            status = MP_MACHINE_REGISTERED;
+            status = MP_TASK_COMPLETED;
         }
         else
         {
-            status = MP_MACHINE_NOT_REGISTERED;
+            status = MP_TASK_IN_PROGRESS;
         }
 
         res = MP_SUCCESS;
@@ -85,7 +87,7 @@ MpResult MPManagement::setRegistrationStatusAsComplete()
         {
             break;
         }
-        regStatus.registrationStatus = MP_MACHINE_REGISTERED;
+        regStatus.registrationStatus = MP_TASK_COMPLETED;
         res = m_mpuefi->setRegistrationStatus(regStatus);
         if (MP_SUCCESS != res)
         {
@@ -97,7 +99,7 @@ MpResult MPManagement::setRegistrationStatusAsComplete()
     return res;
 }
 
-MpResult MPManagement::getRequestData(uint8_t *buffer, uint16_t &buffer_size, MpRequestType expectedRequestType)
+MpResult MPManagement::getRequestData(uint8_t *buffer, uint32_t &buffer_size, MpRequestType expectedRequestType)
 {
     MpRegistrationStatus status;
     MpRequestType type;
@@ -116,12 +118,13 @@ MpResult MPManagement::getRequestData(uint8_t *buffer, uint16_t &buffer_size, Mp
         res = m_mpuefi->getRegistrationStatus(status);
         if (MP_SUCCESS != res)
         {
-
+            management_log_message(MP_REG_LOG_LEVEL_ERROR, "%s: Platform doesn't support SGX MP Registration.\n", functionName.c_str());
             break;
         }
 
-        if (MP_MACHINE_NOT_REGISTERED != status.registrationStatus)
+        if (MP_TASK_IN_PROGRESS != status.registrationStatus)
         {
+            management_log_message(MP_REG_LOG_LEVEL_ERROR, "%s: Registration completed, no pending %s.\n", functionName.c_str(), expectedArtifactTypeName.c_str());
             res = MP_NO_PENDING_DATA;
             break;
         }
@@ -134,12 +137,13 @@ MpResult MPManagement::getRequestData(uint8_t *buffer, uint16_t &buffer_size, Mp
 
         if (expectedRequestType != type)
         {
+            management_log_message(MP_REG_LOG_LEVEL_ERROR, "%s: The pending request is not %s.\n", functionName.c_str(), expectedArtifactTypeName.c_str());
             res = MP_NO_PENDING_DATA;
             break;
         }
 
         uint8_t requestData[MAX_REQUEST_SIZE];
-        uint16_t size = sizeof(requestData);
+        uint32_t size = sizeof(requestData);
         memset(&requestData, 0, sizeof(requestData));
         res = m_mpuefi->getRequest((uint8_t *)&requestData, size);
         if (MP_SUCCESS != res)
@@ -159,6 +163,8 @@ MpResult MPManagement::getRequestData(uint8_t *buffer, uint16_t &buffer_size, Mp
 
         memcpy(buffer, &requestData, size);
         buffer_size = size;
+        status.registrationStatus = MP_TASK_COMPLETED;
+        res = m_mpuefi->setRegistrationStatus(status);
         if (MP_SUCCESS != res)
         {
             break;
@@ -168,7 +174,7 @@ MpResult MPManagement::getRequestData(uint8_t *buffer, uint16_t &buffer_size, Mp
     return res;
 }
 
-MpResult MPManagement::getPlatformManifest(uint8_t *buffer, uint16_t &buffer_size)
+MpResult MPManagement::getPlatformManifest(uint8_t *buffer, uint32_t &buffer_size)
 {
     return getRequestData(buffer, buffer_size, MP_REQ_REGISTRATION);
 }

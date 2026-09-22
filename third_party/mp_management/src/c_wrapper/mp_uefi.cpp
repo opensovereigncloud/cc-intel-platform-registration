@@ -30,8 +30,8 @@
  */
 /**
  * File: mp_uefi.cpp
- *
- * Description: Implemenation of the C funcitons that wrap the class methods
+ *   
+ * Description: Implemenation of the C funcitons that wrap the class methods 
  * defined in the FSUefi class.
  */
 #include "MPUefi.h"
@@ -40,20 +40,18 @@
 
 using std::string;
 
-MPUefi *g_mpUefi = NULL;
+MPUefi* g_mpUefi = NULL;
 
-MpResult mp_uefi_init()
+MpResult mp_uefi_init(const char* path, const LogLevel logLevel)
 {
     MpResult res = MP_UNEXPECTED_ERROR;
-    if (g_mpUefi)
-    {
+    if (g_mpUefi) {
         res = MP_REDUNDANT_OPERATION;
         goto out;
     }
 
-    g_mpUefi = new MPUefi();
-    if (!g_mpUefi)
-    {
+    g_mpUefi = new MPUefi(initUefi(path ? path : "", logLevel));
+    if (!g_mpUefi) {
         res = MP_MEM_ERROR;
         goto out;
     }
@@ -62,77 +60,84 @@ out:
     return res;
 }
 
-MpResult mp_uefi_get_request_type(MpRequestType *type)
+MpResult mp_uefi_get_request_type(MpRequestType* type)
 {
-    if (!type)
-    {
+    if (!type) {
         return MP_INVALID_PARAMETER;
     }
 
-    if (!g_mpUefi)
-    {
+    if (!g_mpUefi) {
+        return MP_NOT_INITIALIZED;
+    }
+    
+	return g_mpUefi->getRequestType(*type);
+}
+
+MpResult mp_uefi_get_request(uint8_t *request, uint16_t *request_size) {
+    if(!request_size)
+      return MP_INVALID_PARAMETER;
+
+    if (!g_mpUefi) {
         return MP_NOT_INITIALIZED;
     }
 
-    return g_mpUefi->getRequestType(*type);
+    uint32_t requestSize = *request_size;
+    MpResult result = g_mpUefi->getRequest(request, requestSize);
+    *request_size = static_cast<uint16_t>(requestSize);
+
+    return result;
 }
 
-MpResult mp_uefi_get_request(uint8_t *request, uint16_t *request_size)
-{
-    if (!request_size)
-    {
+MpResult mp_uefi_get_request_ex(uint8_t *request, uint32_t *request_size) {
+    if (!request_size) {
         return MP_INVALID_PARAMETER;
     }
 
-    if (!g_mpUefi)
-    {
+    if (!g_mpUefi) {
         return MP_NOT_INITIALIZED;
     }
 
     return g_mpUefi->getRequest(request, *request_size);
 }
 
-MpResult mp_uefi_get_registration_status(MpRegistrationStatus *status)
+
+
+MpResult mp_uefi_get_registration_status(MpRegistrationStatus* status)
 {
-    if (!status)
-    {
+    if (!status) {
         return MP_INVALID_PARAMETER;
     }
 
-    if (!g_mpUefi)
-    {
+    if (!g_mpUefi) {
         return MP_NOT_INITIALIZED;
     }
 
-    return g_mpUefi->getRegistrationStatus(*status);
+	return g_mpUefi->getRegistrationStatus(*status);
 }
 
-MpResult mp_uefi_set_registration_status(const MpRegistrationStatus *status)
+MpResult mp_uefi_set_registration_status(const MpRegistrationStatus* status)
 {
-    if (!status)
-    {
+    if (!status) {
         return MP_INVALID_PARAMETER;
     }
 
-    if (!g_mpUefi)
-    {
+    if (!g_mpUefi) {
         return MP_NOT_INITIALIZED;
     }
 
-    return g_mpUefi->setRegistrationStatus(*status);
+	return g_mpUefi->setRegistrationStatus(*status);
 }
 
-MpResult mp_uefi_terminate()
+
+
+MpResult mp_uefi_terminate() 
 {
     MpResult res = MP_UNEXPECTED_ERROR;
-    if (g_mpUefi)
-    {
+    if (g_mpUefi) {
         delete g_mpUefi;
         g_mpUefi = NULL;
         res = MP_SUCCESS;
-    }
-    else
-    {
+    } else {
         res = MP_REDUNDANT_OPERATION;
     }
     return res;

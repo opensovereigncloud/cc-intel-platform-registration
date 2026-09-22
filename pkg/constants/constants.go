@@ -8,6 +8,9 @@ const DefaultRegistrationServiceIntervalInMinutesEnv = "CC_IPR_REGISTRATION_INTE
 const DefaultRegistrationServicePort = 8080
 const RegistrationServicePortEnv = "CC_IPR_REGISTRATION_SERVICE_PORT"
 
+const DefaultRegistrationServiceEfiVariablesPath = "/sys/firmware/efi/efivars"
+const RegistrationServiceEfiVariablesPathEnv = "CC_IPR_REGISTRATION_EFI_VARIABLES_PATH"
+
 // PCCS configuration
 const PCCSURLsEnv = "CC_PCCS_URLS"
 const PCCSCACertPathEnv = "CC_PCCS_CA_CERT_PATH" // Directory path for custom CA certificates

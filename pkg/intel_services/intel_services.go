@@ -236,7 +236,9 @@ func (r *IntelService) registerPlatformToEndpoint(url string, platformManifest m
 		}
 		return metrics.CreateUnknownErrorStatusCodeMetric(), fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+    	_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode == http.StatusCreated {
 		return metrics.StatusCodeMetric{Status: metrics.PlatformRebootNeeded}, nil
@@ -313,7 +315,10 @@ func (r *IntelService) retrievePCKFromEndpoint(requestURL string) (metrics.Statu
 		}
 		return metrics.CreateUnknownErrorStatusCodeMetric(), fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+    	_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode == http.StatusOK {
 		return metrics.StatusCodeMetric{Status: metrics.PlatformDirectlyRegistered}, nil

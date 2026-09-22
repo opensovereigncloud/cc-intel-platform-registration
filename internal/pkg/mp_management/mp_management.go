@@ -5,18 +5,89 @@ package mpmanagement
 #cgo LDFLAGS: -lmp_management -lstdc++
 
 #include <stdlib.h>
-#include "../../../third_party/mp_management/src/include/c_wrapper/mp_management.h"
+#include "../../../third_party/mp_management/include/c_wrapper/mp_management.h"
+#include "../../../third_party/mp_management/include/logger.h"
+
 */
 import "C"
 
 import (
 	"fmt"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"sync"
 )
+
+var (
+	globalZapLogger *zap.Logger
+	loggerMutex     sync.RWMutex
+)
+
+func mapZapToCppLevel(level zapcore.Level) C.LogLevel {
+	switch {
+	case level <= zapcore.DebugLevel:
+		return C.MP_REG_LOG_LEVEL_DEBUG
+	case level == zapcore.InfoLevel:
+		return C.MP_REG_LOG_LEVEL_INFO
+	case level == zapcore.WarnLevel:
+		return C.MP_REG_LOG_LEVEL_WARN
+	case level >= zapcore.ErrorLevel:
+		return C.MP_REG_LOG_LEVEL_ERROR
+	default:
+		return C.MP_REG_LOG_LEVEL_INFO
+	}
+}
+
+func SetCgoZapLogger(l *zap.Logger) {
+	if l == nil {
+		return
+	}
+
+	loggerMutex.Lock()
+	globalZapLogger = l
+	loggerMutex.Unlock()
+}
+
+//export goZapLogBridge
+func goZapLogBridge(component C.int, level C.int, msg *C.char) {
+	loggerMutex.RLock()
+	logger := globalZapLogger
+	loggerMutex.RUnlock()
+
+	if logger == nil {
+		return
+	}
+
+	goMsg := C.GoString(msg)
+
+	var compName string
+	switch component {
+	case 0:
+		compName = "mp_uefi"
+	case 1:
+		compName = "mp_management"
+	default:
+		compName = "core"
+	}
+
+	compLogger := logger.With(zap.String("component", compName))
+
+	switch level {
+	case C.MP_REG_LOG_LEVEL_ERROR:
+		compLogger.Error(goMsg)
+	case C.MP_REG_LOG_LEVEL_WARN:
+		compLogger.Warn(goMsg)
+	case C.MP_REG_LOG_LEVEL_INFO:
+		compLogger.Info(goMsg)
+	case C.MP_REG_LOG_LEVEL_DEBUG:
+		compLogger.Debug(goMsg)
+	default:
+		compLogger.Debug(goMsg)
+	}
+}
 
 // MPManagement constants
 const (
-	MPMaxRequestSize = 1024 * 56
-
 	MPResultCodeSuccess            = 0
 	MPResultNoPendingData          = 1
 	MPResultAlreadyRegistered      = 2
@@ -40,9 +111,12 @@ type MPManagement struct {
 type PlatformManifest []byte
 
 // NewMPManagement creates a new instance of MPManagement
-func NewMPManagement() *MPManagement {
+func NewMPManagement(efiVariablesPath string) *MPManagement {
 
-	C.mp_management_init()
+	activeZapLevel := globalZapLogger.Level()
+	glog_level := mapZapToCppLevel(activeZapLevel)
+
+	C.mp_management_init(C.CString(efiVariablesPath), glog_level)
 	return &MPManagement{initialized: true}
 }
 
@@ -56,7 +130,7 @@ func (mp *MPManagement) Close() {
 
 // GetPlatformManifest retrieves the platform manifest by reading the UEFI SgxRegistrationServerRequest
 func (mp *MPManagement) GetPlatformManifest() (PlatformManifest, error) {
-	var size C.uint16_t = MPMaxRequestSize
+	var size C.uint32_t = C.UINT32_MAX
 	buffer := make([]byte, size)
 
 	operation_result := C.mp_management_get_platform_manifest((*C.uint8_t)(&buffer[0]), &size)
@@ -70,12 +144,12 @@ func (mp *MPManagement) GetPlatformManifest() (PlatformManifest, error) {
 
 // IsMachineRegistered retrieves the machine registration status by reading the UEFI SgxRegistrationStatus.SgxRegistrationComplete variable flag
 func (mp *MPManagement) IsMachineRegistered() (bool, error) {
-	var status C.MpMachineRegistrationStatus
+	var status C.MpTaskStatus
 	operation_result := C.mp_management_get_registration_status(&status)
 	if operation_result != MPResultCodeSuccess {
 		return false, fmt.Errorf("failed to get registration status uefi variable: %s", getErrorDescription(int(operation_result)))
 	}
-	return status == C.MP_MACHINE_REGISTERED, nil
+	return status == C.MP_TASK_COMPLETED, nil
 }
 
 func getErrorDescription(operation_result int) string {

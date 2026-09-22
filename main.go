@@ -165,7 +165,8 @@ func runService(ctx context.Context, logger *zap.Logger) error {
 		zap.Int("pccsURLCount", len(cfg.PCCSURLs)),
 		zap.Bool("customCACert", cfg.PCCSCACertPath != ""),
 		zap.Duration("registrationInterval", cfg.RegistrationInterval),
-		zap.Int("servicePort", cfg.ServicePort))
+		zap.Int("servicePort", cfg.ServicePort),
+		zap.String("efiVariablesPath", cfg.EfiVariablesPath))
 
 	signalCtx, signalCancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer signalCancel()
@@ -195,11 +196,11 @@ func runService(ctx context.Context, logger *zap.Logger) error {
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/live", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Service is healthy")
+		_,_ =  fmt.Fprintf(w, "Service is healthy")
 	})
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Service is ready")
+		_,_ = fmt.Fprintf(w, "Service is ready")
 	})
 
 	// Create server with timeout configuration

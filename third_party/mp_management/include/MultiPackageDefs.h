@@ -64,12 +64,10 @@ typedef enum
     MP_INSUFFICIENT_PRIVILEGES = 12
 } MpResult;
 
-typedef enum
-{
-    MP_MACHINE_NOT_REGISTERED = 0,
-    MP_MACHINE_REGISTERED = 1
-} MpMachineRegistrationStatus;
-
+typedef enum {
+    MP_TASK_IN_PROGRESS = 0,
+    MP_TASK_COMPLETED = 1
+} MpTaskStatus;
 typedef enum
 {
     MP_REQ_REGISTRATION = 0,
@@ -131,5 +129,16 @@ typedef struct _ProxyConf
     ProxyType proxy_type;
     char proxy_url[MAX_PATH_SIZE];
 } ProxyConf;
+
+
+typedef enum _LogLevel
+{
+    MP_REG_LOG_LEVEL_NONE = 0,
+    MP_REG_LOG_LEVEL_ERROR = 1,
+    MP_REG_LOG_LEVEL_WARN = 2,
+    MP_REG_LOG_LEVEL_INFO = 3,
+    MP_REG_LOG_LEVEL_DEBUG = 4,
+    MP_REG_LOG_LEVEL_MAX_VALUE
+} LogLevel;
 
 #endif // #ifndef __MULTI_PACKAGE_DEFS_H

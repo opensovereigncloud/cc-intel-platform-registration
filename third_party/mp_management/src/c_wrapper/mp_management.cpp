@@ -34,24 +34,24 @@
  * Description: Implemenation of the C funcitons that wrapp the class methods
  * defined in the MPManagement class.
  */
-#include "../include/MPManagement.h"
-#include "../include/c_wrapper/mp_management.h"
+#include "MPManagement.h"
+#include "c_wrapper/mp_management.h"
 #include <string>
 
 using std::string;
 
 MPManagement *g_mpManagement = NULL;
 
-void mp_management_init()
+void mp_management_init(const char *path, LogLevel logLevel)
 {
-    if (g_mpManagement)
+    if (!path || g_mpManagement)
     {
         return;
     }
-    g_mpManagement = new MPManagement();
+    g_mpManagement = new MPManagement(string(path), logLevel);
 }
 
-MpResult mp_management_get_platform_manifest(uint8_t *buffer, uint16_t *size)
+MpResult mp_management_get_platform_manifest(uint8_t *buffer, uint32_t *size)
 {
     if (!buffer || !size)
     {
@@ -60,7 +60,7 @@ MpResult mp_management_get_platform_manifest(uint8_t *buffer, uint16_t *size)
     return g_mpManagement->getPlatformManifest(buffer, *size);
 }
 
-MpResult mp_management_get_registration_status(MpMachineRegistrationStatus *status)
+MpResult mp_management_get_registration_status(MpTaskStatus *status)
 {
     if (!status)
     {

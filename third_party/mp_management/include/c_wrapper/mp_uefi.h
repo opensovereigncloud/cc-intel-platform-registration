@@ -56,7 +56,7 @@ extern "C"
      *      - MP_REDUNDANT_OPERATION
      *      - MP_MEM_ERROR
      */
-    MpResult mp_uefi_init();
+    MpResult mp_uefi_init(const char *path, const LogLevel logLevel);
 
     /**
      * Retrieves the pending request type.
@@ -90,6 +90,8 @@ extern "C"
      *      - MP_UEFI_INTERNAL_ERROR
      */
     MpResult mp_uefi_get_request(uint8_t *request, uint16_t *request_size);
+
+    MpResult mp_uefi_get_request_ex(uint8_t *request, uint32_t *request_size);
 
     /**
      * Retrieves the current registration status.
