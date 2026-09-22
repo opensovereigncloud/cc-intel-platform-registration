@@ -1,63 +1,47 @@
 /*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+ * Copyright(c) 2011-2025 Intel Corporation
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Intel Corporation nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
+ * SPDX-License-Identifier: BSD-3-Clause
  */
-/**
- * File: FSUefi.cpp
- *
- * Description: Implementation for the high-level UEFI functionality to
- * communicate with BIOS using UEFI variables.
- */
+
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <linux/fs.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <type_traits>
 #include <unistd.h>
 #include "FSUefi.h"
+#include "logger.h"
 
-static uint8_t attributes[ATTRIBUTE_SIZE] = {0x07, 0x00, 0x00, 0x00};
+static constexpr uint8_t attributes[4] = {0x07, 0x00, 0x00, 0x00};
+
+namespace
+{
+
+    template <
+        typename T,
+        typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    T *allocArray(size_t count)
+    {
+        try
+        {
+            return new T[count];
+        }
+        catch (const std::bad_alloc &)
+        {
+            return nullptr;
+        }
+    }
+
+} // namespace
 
 long FSUefi::fdGetVarFileSize(int fd)
 {
     struct stat stat_buf;
     int rc = fstat(fd, &stat_buf);
     return rc == 0 ? stat_buf.st_size : -1;
-}
-
-const string FSUefi::createFullPath(const string &path, const char *uefiVarName)
-{
-    string sUefiVarName;
-    sUefiVarName = string(uefiVarName);
-    string sFullPath = path + sUefiVarName;
-    return sFullPath;
 }
 
 uint8_t *FSUefi::readUEFIVar(const char *varName, size_t &dataSize)
@@ -67,32 +51,34 @@ uint8_t *FSUefi::readUEFIVar(const char *varName, size_t &dataSize)
     int fd = -1;
 
     // get abs uefi path
-    string fullPath = createFullPath(m_uefiAbsPath, varName);
-    const char *var_name_path = fullPath.c_str();
+    const std::string fullPath = m_uefiAbsPath + varName;
 
     do
     {
         errno = 0;
-        fd = open(var_name_path, O_RDONLY);
+        fd = open(fullPath.c_str(), O_RDONLY);
         if (fd == -1)
         {
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "readUEFIVar: failed to open uefi variable %s ,error: %s\n", fullPath.c_str(), strerror(errno));
             break;
         }
 
         // get uefi file size
-        long tempSize = fdGetVarFileSize(fd);
+        const long tempSize = fdGetVarFileSize(fd);
         if (tempSize < 0)
         {
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "readUEFIVar: failed to get variable file size %ld \n", tempSize);
             break;
         }
 
-        size_t fileSize = tempSize;
+        const size_t fileSize = static_cast<size_t>(tempSize);
         // actual data size without uefi attribute
         dataSize = fileSize - sizeof(attributes);
 
-        entire_var = new uint8_t[fileSize];
+        entire_var = allocArray<uint8_t>(fileSize);
         if (!entire_var)
         {
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "readUEFIVar: allocation failure\n");
             break;
         }
 
@@ -100,12 +86,14 @@ uint8_t *FSUefi::readUEFIVar(const char *varName, size_t &dataSize)
         ssize_t bytesRead = read(fd, entire_var, fileSize);
         if (bytesRead <= 0)
         {
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "readUEFIVar: failed to read uefi variable %s ,error: %s\n", fullPath.c_str(), strerror(errno));
             break;
         }
 
-        var_data = new uint8_t[dataSize];
+        var_data = allocArray<uint8_t>(dataSize);
         if (!var_data)
         {
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "readUEFIVar: allocation failure\n");
             break;
         }
 
@@ -131,12 +119,19 @@ int FSUefi::writeUEFIVar(const char *varName, const uint8_t *data, size_t dataSi
     mode_t mode = 0;
     ssize_t bytesWrote = 0;
     char *buffer = NULL;
+    int lastOpenErrno = 0;
 
     do
     {
-        buffer = new char[dataSize + sizeof(attributes)];
+        if (dataSize + sizeof(attributes) < dataSize)
+        {
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "writeUEFIVar: the data size is too big\n");
+            break;
+        }
+        buffer = allocArray<char>(dataSize + sizeof(attributes));
         if (!buffer)
         {
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "writeUEFIVar: allocation failure\n");
             break;
         }
 
@@ -146,28 +141,36 @@ int FSUefi::writeUEFIVar(const char *varName, const uint8_t *data, size_t dataSi
         memcpy(buffer + sizeof(attributes), data, dataSize);
 
         // get abs uefi path
-        string fullPath = createFullPath(m_uefiAbsPath, varName);
-        const char *UEFIvarNamePath = fullPath.c_str();
+        const std::string fullPath = m_uefiAbsPath + varName;
 
         // set read only flag
         flags = O_RDONLY;
 
         errno = 0;
-        fd = open(UEFIvarNamePath, flags);
+        fd = open(fullPath.c_str(), flags);
         if (fd == -1)
         {
             if (ENOENT == errno)
             {
+                lastOpenErrno = errno;
                 if (create)
                 {
                     // set flags: create, user r/w permission, group read permission, others read permission.
                     flags |= O_CREAT;
                     mode |= S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-                    fd = open(UEFIvarNamePath, flags, mode);
+                    fd = open(fullPath.c_str(), flags, mode);
                 }
             }
             if (fd == -1)
             {
+                if ((create) && (ENOENT == lastOpenErrno))
+                {
+                    uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "writeUEFIVar: failed to create uefi variable %s, error: %s\n", fullPath.c_str(), strerror(errno));
+                }
+                else
+                {
+                    uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "writeUEFIVar: failed to open uefi variable %s, error: %s\n", fullPath.c_str(), strerror(errno));
+                }
                 break;
             }
         }
@@ -177,14 +180,16 @@ int FSUefi::writeUEFIVar(const char *varName, const uint8_t *data, size_t dataSi
             long tempSize = fdGetVarFileSize(fd);
             if (tempSize < 0)
             {
+                uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "writeUEFIVar: failed to get variable file size %ld \n", tempSize);
                 break;
             }
 
-            uint8_t uefiAttributes[ATTRIBUTE_SIZE];
+            uint8_t uefiAttributes[4];
             errno = 0;
-            ssize_t bytesRead = read(fd, uefiAttributes, ATTRIBUTE_SIZE);
-            if (bytesRead != ATTRIBUTE_SIZE)
+            ssize_t bytesRead = read(fd, uefiAttributes, 4);
+            if (bytesRead != 4)
             {
+                uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "writeUEFIVar: failed to read uefi variable %s attributes ,error: %s\n", fullPath.c_str(), strerror(errno));
                 break;
             }
             ///
@@ -205,6 +210,7 @@ int FSUefi::writeUEFIVar(const char *varName, const uint8_t *data, size_t dataSi
         rc = ioctl(fd, FS_IOC_GETFLAGS, &oflags);
         if (rc < 0)
         {
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "writeUEFIVar: failed to get UEFI var %s flags, error: %s\n", fullPath.c_str(), strerror(errno));
             break;
         }
 
@@ -215,21 +221,24 @@ int FSUefi::writeUEFIVar(const char *varName, const uint8_t *data, size_t dataSi
             rc = ioctl(fd, FS_IOC_SETFLAGS, &oflags);
             if (rc < 0)
             {
+                uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "writeUEFIVar: failed to set UEFI var %s flags, error: %s\n", fullPath.c_str(), strerror(errno));
                 break;
             }
         }
 
         // close fd and re-open with write only
         close(fd);
-        fd = open(UEFIvarNamePath, O_WRONLY);
+        fd = open(fullPath.c_str(), O_WRONLY);
         if (fd == -1)
         {
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "writeUEFIVar: failed to re-open uefi variable %s, error: %s\n", fullPath.c_str(), strerror(errno));
             break;
         }
 
         bytesWrote = write(fd, buffer, dataSize + sizeof(attributes));
         if (bytesWrote != (ssize_t)(dataSize + sizeof(attributes)))
         {
+            uefi_log_message(MP_REG_LOG_LEVEL_ERROR, "writeUEFIVar: failed to write uefi variable %s, wrote %zu bytes, error: %s\n", fullPath.c_str(), bytesWrote, strerror(errno));
             break;
         }
 

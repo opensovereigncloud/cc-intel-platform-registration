@@ -16,6 +16,9 @@ fullnameOverride: ""
 # Must be a non-zero number
 registrationIntervalInMinutes: 60
 
+# The CC_IPR_REGISTRATION_EFI_VARIABLES_PATH specifies the path to the SGX UEFI variables on the host system
+efiVariablesPath: ""
+
 # PCCS (Provisioning Certificate Caching Service) configuration
 pccs:
   # Optional PCCS URLs for PCK certificate retrieval caching

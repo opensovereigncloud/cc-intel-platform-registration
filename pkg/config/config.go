@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"path"
 
 	"github.com/opensovereigncloud/cc-intel-platform-registration/pkg/constants"
 )
@@ -16,6 +17,9 @@ type RegistrationServiceConfig struct {
 	// PCCS configuration
 	PCCSURLs       []string // Parsed from CC_PCCS_URLS
 	PCCSCACertPath string   // From CC_PCCS_CA_CERT_PATH (directory with custom CA certificates)
+
+	// EFI variables path
+	EfiVariablesPath string // From CC_IPR_REGISTRATION_EFI_VARIABLES_PATH
 
 	// Intel fallback endpoints
 	IntelRegistrationURL string
@@ -61,6 +65,19 @@ func LoadRegistrationServiceConfig() (*RegistrationServiceConfig, error) {
 			config.PCCSURLs = append(config.PCCSURLs, rawURL)
 		}
 	}
+
+	// Load EFI variables path (optional)
+	config.EfiVariablesPath = os.Getenv(constants.RegistrationServiceEfiVariablesPathEnv)
+	if config.EfiVariablesPath == "" {
+		config.EfiVariablesPath = constants.DefaultRegistrationServiceEfiVariablesPath
+	}
+
+	cleanedEfiVariablesPath := path.Clean(config.EfiVariablesPath)
+	if cleanedEfiVariablesPath == "/" {
+		config.EfiVariablesPath = cleanedEfiVariablesPath
+	}
+
+	config.EfiVariablesPath = cleanedEfiVariablesPath + "/"
 
 	// Load CA cert path (optional - directory containing custom CA certificates for PCCS)
 	config.PCCSCACertPath = os.Getenv(constants.PCCSCACertPathEnv)

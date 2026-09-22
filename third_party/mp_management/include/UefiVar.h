@@ -33,8 +33,8 @@
  *  
  * Description: Definitions of the BIOS UEFI Variable data and structures.
  */
-#ifndef __UEFI_VAR_H
-#define __UEFI_VAR_H
+#ifndef UEFI_VAR_H_
+#define UEFI_VAR_H_
 
 #include <cstdint>
 
@@ -61,6 +61,7 @@
 #define GUID_SIZE                           16
 #define MP_BIOS_UEFI_VARIABLE_VERSION_1     1
 #define MP_BIOS_UEFI_VARIABLE_VERSION_2     2
+#define MP_BIOS_UEFI_VARIABLE_VERSION_3     3
 #define MP_STRUCTURE_VERSION                1
 #define SERVER_INFO_FLAG_RS_NOT_SAVE_KEYS   0x0001
 
@@ -77,32 +78,48 @@ const uint8_t AddRequest_GUID[GUID_SIZE] = { 0x69,0x65,0x19,0xca,0x73,0xc1,0x47,
 
 #pragma pack(push, 1)
 
-typedef struct _StructureHeader
+typedef struct tlvheader_t
 {
-    uint8_t guid[GUID_SIZE];      /// Structure GUID value
-    uint16_t size;               /// Size of complete structure minus the size of this header.
-    uint16_t version;            /// Version of complete structure.  Currenlty, must be 1 for all structures. 
-    uint8_t reserved[12];  /// Must be Zero
+    uint8_t guid[GUID_SIZE]; /// Structure GUID value
+    uint16_t size;           /// Size of complete structure minus the size of this header. Max 64k ranging from 0-65.535
+    uint16_t version;        /// Version of complete structure.  Currenlty, must be 1 for all structures.
+    uint8_t type;            /// currently 1 for most of all structures, unless specified differently
+    uint32_t extendedSize;   /// Extended 32bit size used if structure is bigger than 64k, then SIZE field shall be 0.
+    uint8_t reserved[7];     /// Must be Zero
+} TlvHeader;
+
+typedef struct s3muefivar_t {
+    uint16_t version;
+    uint32_t size;
+    TlvHeader header;
+} S3mUefiVar;
+
+typedef struct structureheader_t
+{
+    uint8_t guid[GUID_SIZE];  /// Structure GUID value
+    uint16_t size;            /// Size of complete structure minus the size of this header.
+    uint16_t version;         /// Version of complete structure.  Currenlty, must be 1 for all structures. 
+    uint8_t reserved[12];     /// Must be Zero
 }StructureHeader;
 
-typedef struct _SgxUefiVar {
+typedef struct sgxuefivar_t {
     uint16_t version;
     uint16_t size;
     StructureHeader header;
 } SgxUefiVar;
 
-typedef struct _ConfigurationUEFI {
+typedef struct configurationuefi_t {
     uint16_t version;
     uint16_t size;
     uint16_t flags;
-    StructureHeader headerInfo;      /// Unique Identifier for this data structure type.
-    uint16_t urlSize;            /// Length of the Registration Server URL, rounded up to the nearest multiple of 16
-    uint8_t url[MAX_URL_SIZE];   /// Registration server URL in ASCII representation. It does not contain a '\0\ null termination byte.
-                                 /// any data beyond url[urlSize-1] is undefined.
-    StructureHeader headerId;  /// PlatformInstanceID header
+    StructureHeader headerInfo; /// Unique Identifier for this data structure type.
+    uint16_t urlSize;           /// Length of the Registration Server URL, rounded up to the nearest multiple of 16
+    uint8_t url[MAX_URL_SIZE];  /// Registration server URL in ASCII representation. It does not contain a '\0\ null termination byte.
+                                /// any data beyond url[urlSize-1] is undefined.
+    StructureHeader headerId;   /// PlatformInstanceID header
 } ConfigurationUEFI;
 
-typedef struct _RegistrationStatusUEFI {
+typedef struct registrationstatusuefi_t {
     uint16_t version;
     uint16_t size;
     union {
@@ -116,21 +133,21 @@ typedef struct _RegistrationStatusUEFI {
     uint8_t errorCode;
 } RegistrationStatusUEFI;
 
-typedef struct _EpcBiosConfigUEFI {
+typedef struct epcbiosconfiguefi_t {
 	uint32_t supportedPrmBins; ///< supported EPC bins; Bit 0- Support for 1 MB, 1- Support for 2 MB, 2- Support for 4 MB,
 	uint32_t maxEpcSize;       ///< Maximum EPC size supported by platform in MB
 	uint32_t epcSize;          ///< Allocated EPC size in MB
 	uint32_t epcMap[32];      ///< Mapping of PRM size to corresponding EPC size
 } EpcBiosConfigUEFI;
 
-typedef struct _EpcOsConfigUEFI {
+typedef struct epcosconfiguefi_t {
 	uint32_t epcSize;           ///< Requested EPC size in MB
 } EpcOsConfigUEFI;
 
-typedef struct _SoftwareGuardStatusUEFI {
+typedef struct softwareguardstatusuefi_t {
 	uint8_t sgxStatus;
     uint8_t reserved;
 } SoftwareGuardStatusUEFI;
 
 #pragma pack(pop)
-#endif  // #ifndef __UEFI_VAR_
+#endif  // #ifndef UEFI_VAR_

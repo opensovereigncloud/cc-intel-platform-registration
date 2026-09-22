@@ -29,31 +29,28 @@
  *
  */
 /**
- * File: FSUefi.h
+ * File: mp_mangement.h
  *
- * Description: Definition for the class to send communicate with BIOS
- * via UEFI variables. Implements the IUefi interface class.
+ * Description: C definition of function wrappers for C++ methods in
+ * the MPManagement class implementation.
  */
-#ifndef __FS_UEFI_H
-#define __FS_UEFI_H
-#define ATTRIBUTE_SIZE 4
+#ifndef __MP_MANAGEMENT_H
+#define __MP_MANAGEMENT_H
 
-#include <string>
-#include "MultiPackageDefs.h"
-
-using std::string;
-
-class FSUefi
+#include "../MultiPackageDefs.h"
+#ifdef __cplusplus
+extern "C"
 {
-public:
-    FSUefi(string uefiPath) : m_uefiAbsPath(uefiPath) {};
-    virtual uint8_t *readUEFIVar(const char *varName, size_t &dataSize);
-    virtual int writeUEFIVar(const char *varName, const uint8_t *data, size_t dataSize, bool create);
+#endif
 
-private:
-    static const string createFullPath(const string &path, const char *uefiVarName);
-    static long fdGetVarFileSize(int fd);
-    string m_uefiAbsPath;
+    void mp_management_init(const char *path, LogLevel logLevel);
+    MpResult mp_management_get_platform_manifest(uint8_t *buffer, uint32_t *size);
+    MpResult mp_management_get_registration_status(MpTaskStatus *status);
+    MpResult mp_management_set_registration_status_as_complete();
+    void mp_management_terminate();
+
+#ifdef __cplusplus
 };
+#endif
 
-#endif // #ifndef __FS_UEFI_H
+#endif // __#ifndef MP_MANAGEMENT_H

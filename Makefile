@@ -16,7 +16,7 @@ BINARY_NAME=cc-intel-platform-registration
 VERSION ?=dev
 CONTAINER_TOOL ?= docker
 IMG_REGISTRY ?= local
-GO_MOD_VERSION ?= 1.26.0
+GO_MOD_VERSION ?= 1.27.3
 IMAGE_BUILD_ARGS ?= --build-arg GO_MOD_VERSION=$(GO_MOD_VERSION) --build-arg TARGET_VERSION=${VERSION}
 IMAGE=$(IMG_REGISTRY)/cc-intel-platform-registration:$(VERSION)
 CONTAINER_DEV_RUN = $(CONTAINER_TOOL) run --rm -e LD_LIBRARY_PATH=/cc_build_dir/build/lib $(IMAGE)
@@ -133,7 +133,7 @@ GOVULNCHECK = $(LOCALBIN)/govulncheck
 DEADCODE = $(LOCALBIN)/deadcode
 
 ## Tool Versions
-GOLANGCI_LINT_VERSION ?= v1.63.4
+GOLANGCI_LINT_VERSION ?= v2.15.0
 
 
 .PHONY: deadcode
@@ -150,7 +150,7 @@ $(GOVULNCHECK): $(LOCALBIN)
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary

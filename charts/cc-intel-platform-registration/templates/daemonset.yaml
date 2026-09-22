@@ -46,6 +46,8 @@ spec:
               value: "{{ .Values.registrationIntervalInMinutes }}"
             - name: CC_IPR_REGISTRATION_SERVICE_PORT
               value: "{{ .Values.service.port }}"
+            - name: CC_IPR_REGISTRATION_EFI_VARIABLES_PATH
+              value: "{{ .Values.efiVariablesPath }}"
             {{- if .Values.pccs.urls }}
             - name: CC_PCCS_URLS
               value: "{{ .Values.pccs.urls }}"

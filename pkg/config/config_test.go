@@ -45,10 +45,10 @@ func TestLoadRegistrationServiceConfig_NoCACertPath(t *testing.T) {
 			// Set up environment
 			os.Clearenv()
 			if tt.pccsURLs != "" {
-				os.Setenv(constants.PCCSURLsEnv, tt.pccsURLs)
+				t.Setenv(constants.PCCSURLsEnv, tt.pccsURLs)
 			}
 			if tt.caCertPath != "" {
-				os.Setenv(constants.PCCSCACertPathEnv, tt.caCertPath)
+				t.Setenv(constants.PCCSCACertPathEnv, tt.caCertPath)
 			}
 
 			// Call the function

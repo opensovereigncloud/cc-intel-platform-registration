@@ -1,7 +1,7 @@
 # Compiler and flags
 CXX = g++
 AR = ar
-CXXFLAGS = -Wall -Wextra -fPIC -std=c++17 -Isrc/include -Isrc/include/c_wrapper
+CXXFLAGS = -Wall -Wextra -fPIC -std=c++17 -Iinclude -Iinclude/c_wrapper
 LDFLAGS = -Llib 
 ARFLAGS = rcs
 

@@ -37,15 +37,18 @@
 #ifndef __MP_UEFI_H
 #define __MP_UEFI_H
 
+#include <memory>
 #include <string>
 #include "MultiPackageDefs.h"
+#include "FSUefi.h"
 
 using std::string;
-class FSUefi;
 /**
  * This is the main entry point for the SGX Multi-Package UEFI CPP interface.
  * Used to get and set various UEFI variables for the Multi-Package registration flows.
  */
+
+std::unique_ptr<FSUefi> initUefi(std::string path, LogLevel logLevel);
 
 class MPUefi
 {
@@ -54,7 +57,7 @@ public:
      * MPUefi class constructor
      *
      */
-    MPUefi();
+    MPUefi(std::unique_ptr<FSUefi> uefi);
 
     /**
      * Retrieves the pending request type.
@@ -87,7 +90,7 @@ public:
      *      - MP_USER_INSUFFICIENT_MEM
      *      - MP_UEFI_INTERNAL_ERROR
      */
-    MpResult getRequest(uint8_t *request, uint16_t &requestSize);
+    MpResult getRequest(uint8_t *request, uint32_t &requestSize);
 
     /**
      * Retrieves the current registration status.
@@ -113,13 +116,9 @@ public:
      */
     MpResult setRegistrationStatus(const MpRegistrationStatus &status);
 
-    /**
-     * MPUefi class destructor
-     */
-    ~MPUefi();
-
 private:
-    FSUefi *m_uefi;
+    std::unique_ptr<FSUefi> m_uefi;
+    LogLevel m_logLevel;
 
     MPUefi &operator=(const MPUefi &) { return *this; }
     MPUefi(const MPUefi &src) { (void)src; }

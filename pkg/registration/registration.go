@@ -33,7 +33,12 @@ type DefaultRegistrationChecker struct {
 }
 
 func (rc *DefaultRegistrationChecker) Check() (metrics.StatusCodeMetric, error) {
-	mp := mpmanagement.NewMPManagement()
+
+	if rc.log != nil {
+		mpmanagement.SetCgoZapLogger(rc.log)
+	}
+
+	mp := mpmanagement.NewMPManagement(rc.regServiceConfig.EfiVariablesPath)
 	defer mp.Close()
 
 	intelService, err := intelservices.NewIntelService(rc.log, rc.regServiceConfig)

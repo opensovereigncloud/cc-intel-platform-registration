@@ -29,49 +29,29 @@
  *
  */
 /**
- * File: MPManagement.h
+ * File: common.h
  *
- * Description: Classe definition for the management tool functionality.
+ * Description: Definitions of the shared logging functions.
  */
-#ifndef __MPMANAGEMENT_H
-#define __MPMANAGEMENT_H
+#ifndef __MP_LOGGER_H
+#define __MP_LOGGER_H
 
-#include <string>
+#include <stdio.h>
+#include <stdarg.h>
+#include <time.h>
 #include "MultiPackageDefs.h"
 
-class MPUefi;
-
-/**
- * This is the main entry point for the Multi-Package Management interface library.
- * Used to manage the registration SGX feature and registration flow.
- */
-
-class MPManagement
+#ifdef __cplusplus
+extern "C"
 {
-public:
-    MPManagement();
+#endif
 
-    // Retrieves PlatformManifest.
-    // if PlatformManifest UEFI are ready for reading, copies the PlatformManifest to input buffer.
-    // if not, returns an appropriate error (MP_NO_PENDING_DATA). populates buffer_size with the required size in case of insufficient size.
-    virtual MpResult getPlatformManifest(uint8_t *buffer, uint16_t &buffer_size);
+    void uefi_log_message(LogLevel level, const char *format, ...);
 
-    // Retrieves registration error code.
-    // If registration is completed successfully, error_code will be set to 0.
-    // If registration process failed, error_code will be set to the relevant last reported error code.
-    virtual MpResult getRegistrationStatus(MpMachineRegistrationStatus &status);
+    void management_log_message(LogLevel level, const char *format, ...);
 
-    // Sets the machine registration status to completed.
-    virtual MpResult setRegistrationStatusAsComplete();
+#ifdef __cplusplus
+}
+#endif
 
-    virtual ~MPManagement();
-
-private:
-    MPUefi *m_mpuefi;
-
-    MPManagement &operator=(const MPManagement &) { return *this; }
-    MPManagement(const MPManagement &src) { (void)src; }
-    MpResult getRequestData(uint8_t *buffer, uint16_t &buffer_size, MpRequestType requestType);
-};
-
-#endif // #ifndef __MPMANAGEMENT_H
+#endif // #ifndef __MP_LOGGER_H

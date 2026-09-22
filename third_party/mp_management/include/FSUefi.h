@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
+ * Copyright (C) 2011-2025 Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,28 +29,34 @@
  *
  */
 /**
- * File: mp_mangement.h
+ * File: FSUefi.h
  *
- * Description: C definition of function wrappers for C++ methods in
- * the MPManagement class implementation.
+ * Description: Definition for the class to send communicate with BIOS
+ * via UEFI variables.
  */
-#ifndef __MP_MANAGEMENT_H
-#define __MP_MANAGEMENT_H
+#ifndef FS_UEFI_H__
+#define FS_UEFI_H__
 
-#include "../MultiPackageDefs.h"
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
-    void mp_management_init();
-    MpResult mp_management_get_platform_manifest(uint8_t *buffer, uint16_t *size);
-    MpResult mp_management_get_registration_status(MpMachineRegistrationStatus *status);
-    MpResult mp_management_set_registration_status_as_complete();
-    void mp_management_terminate();
+#include <cstddef>
+#include <cstdint>
+#include <string>
 
-#ifdef __cplusplus
+#include "MultiPackageDefs.h"
+
+class FSUefi {
+public:
+  FSUefi(std::string uefiPath, LogLevel logLevel)
+      : m_uefiAbsPath(std::move(uefiPath)), m_logLevel(logLevel) {};
+
+  uint8_t *readUEFIVar(const char *varName, size_t &dataSize);
+  int writeUEFIVar(const char *varName, const uint8_t *data, size_t dataSize, bool create);
+  LogLevel getLogLevel() const  { return m_logLevel; }
+
+private:
+  long fdGetVarFileSize(int fd);
+  std::string m_uefiAbsPath;
+  LogLevel m_logLevel;
 };
-#endif
 
-#endif // __#ifndef MP_MANAGEMENT_H
+#endif // #ifndef FS_UEFI_H__
