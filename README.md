@@ -20,7 +20,7 @@ These metrics can be visualized through a Grafana dashboard to monitor the platf
 - Docker and docker-compose (for local deployment)
 - EFI System Variables: 
      `cc-intel-platform-registration` needs `read` and `write` capabilities to the host device SGX UEFI variables. 
-     It must be able to mount the specified `CC_IPR_REGISTRATION_EFI_VARIABLES_PATH` (this defaults to `/sys/firmware/efi/efivars`) host path. You can configure this path with the 
+     It must be able to mount the specified `CC_IPR_REGISTRATION_EFI_VARIABLES_PATH` (this defaults to `/sys/firmware/efi/efivars`) host path.
 
      When creating your cluster with `k3d`, you should explicitly bind the `/sys/firmware/efi/efivars` volume to your nodes:
 
